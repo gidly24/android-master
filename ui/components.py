@@ -314,6 +314,14 @@ class GlassTextInput(TextInput):
         )
         self._refresh_caret()
 
+    def _draw_line(self, *args, **kwargs):
+        if self.text:
+            color = self.foreground_color
+        else:
+            color = self.hint_text_color
+        self.canvas.add(Color(*color, group="text_tint"))
+        return super()._draw_line(*args, **kwargs)
+
     def _on_focus_change(self, *_):
         if self.focus:
             self._show_caret_now()
