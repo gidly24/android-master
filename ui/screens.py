@@ -1,7 +1,7 @@
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
-from kivy.uix.popup import Popup
+from kivy.uix.modalview import ModalView
 from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
@@ -151,15 +151,21 @@ class TaskListScreen(Screen):
         root.add_widget(self._build_footer())
         self.add_widget(root)
 
+    @staticmethod
+    def _build_panel_header(text):
+        header = BoxLayout(size_hint_y=None, height=dp(36), padding=(dp(2), 0, 0, 0))
+        header.add_widget(SectionTitle(text=text))
+        return header
+
     def _build_filters(self):
         container = GlassPane(
             orientation="vertical",
             spacing=dp(10),
-            padding=(dp(14), dp(16), dp(14), dp(14)),
+            padding=(dp(16), dp(18), dp(16), dp(14)),
             size_hint_y=None,
-            height=dp(214),
+            height=dp(220),
         )
-        container.add_widget(SectionTitle(text="Поиск и фильтрация"))
+        container.add_widget(self._build_panel_header("Поиск и фильтрация"))
 
         self.search_input = GlassTextInput(
             hint_text="Поиск по названию",
@@ -199,9 +205,9 @@ class TaskListScreen(Screen):
         container = GlassPane(
             orientation="vertical",
             spacing=dp(10),
-            padding=(dp(14), dp(16), dp(14), dp(14)),
+            padding=(dp(16), dp(18), dp(16), dp(14)),
         )
-        container.add_widget(SectionTitle(text="Список задач"))
+        container.add_widget(self._build_panel_header("Список задач"))
 
         self.scroll_view = ScrollView()
         self.task_box = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)
@@ -275,44 +281,70 @@ class TaskListScreen(Screen):
         self.refresh_tasks()
 
     def confirm_delete(self, task_id):
-        popup = Popup(
-            title="Удаление задачи",
-            size_hint=(0.82, 0.32),
-            separator_height=1,
-            separator_color=(0.31, 0.39, 0.58, 1),
-            title_color=TEXT_PRIMARY,
-            background_color=(0.05, 0.07, 0.11, 1),
+        popup = ModalView(
+            size_hint=(0.84, None),
+            height=dp(230),
+            auto_dismiss=True,
+            background="",
+            background_color=(0, 0, 0, 0),
         )
+        popup.overlay_color = (0.02, 0.03, 0.06, 0.72)
+
         content = GlassPane(
             orientation="vertical",
-            spacing=dp(12),
-            padding=dp(14),
+            spacing=dp(14),
+            padding=(dp(16), dp(18), dp(16), dp(16)),
             fill_color=(0.08, 0.11, 0.18, 1),
             border_color=(0.29, 0.37, 0.55, 1),
+            radius=dp(30),
         )
+
+        header = Label(
+            text="Удаление задачи",
+            color=TEXT_PRIMARY,
+            size_hint_y=None,
+            font_size="20sp",
+            bold=True,
+            halign="left",
+            valign="middle",
+        )
+        bind_text_size(header)
+        bind_auto_height(header, min_height=dp(30), extra=dp(4))
+        content.add_widget(header)
 
         message = Label(
             text="Удалить задачу без возможности восстановления?",
             color=TEXT_PRIMARY,
             size_hint_y=None,
-            halign="center",
+            halign="left",
             valign="middle",
         )
         bind_text_size(message)
-        bind_auto_height(message, min_height=dp(54))
+        bind_auto_height(message, min_height=dp(50))
         content.add_widget(message)
 
-        buttons = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(8))
-        cancel_button = GlassButton(text="Отмена")
+        note = Label(
+            text="Это действие нельзя отменить.",
+            color=TEXT_MUTED,
+            size_hint_y=None,
+            halign="left",
+            valign="middle",
+        )
+        bind_text_size(note)
+        bind_auto_height(note, min_height=dp(24), extra=dp(4))
+        content.add_widget(note)
+
+        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
+        cancel_button = GlassButton(text="Отмена", height=dp(46))
         cancel_button.bind(on_release=lambda *_: popup.dismiss())
 
-        delete_button = DangerGlassButton(text="Удалить")
+        delete_button = DangerGlassButton(text="Удалить", height=dp(46))
         delete_button.bind(on_release=lambda *_: self._delete_and_close(task_id, popup))
 
         buttons.add_widget(cancel_button)
         buttons.add_widget(delete_button)
         content.add_widget(buttons)
-        popup.content = content
+        popup.add_widget(content)
         popup.open()
 
     def _delete_and_close(self, task_id, popup):

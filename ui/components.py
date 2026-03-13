@@ -417,15 +417,18 @@ class SectionTitle(Label):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("color", TEXT_PRIMARY)
-        kwargs.setdefault("font_size", "19sp")
+        kwargs.setdefault("font_size", "18sp")
         kwargs.setdefault("bold", True)
         kwargs.setdefault("size_hint_y", None)
-        kwargs.setdefault("height", dp(38))
+        kwargs.setdefault("height", dp(34))
         kwargs.setdefault("halign", "left")
         kwargs.setdefault("valign", "middle")
         super().__init__(**kwargs)
-        bind_text_size(self)
-        bind_auto_height(self, min_height=dp(38), extra=dp(6))
+        self.bind(size=self._sync_text_box)
+        Clock.schedule_once(self._sync_text_box, 0)
+
+    def _sync_text_box(self, *_):
+        self.text_size = (max(self.width, dp(10)), self.height)
 
 
 class BadgeLabel(Label):

@@ -12,6 +12,7 @@ ui_check.png
 focus_check.png
 caret_check.png
 *_check.png
+*_check*.png
 text_visibility_check*.png
 
 .kivy/
