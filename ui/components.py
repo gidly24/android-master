@@ -278,14 +278,27 @@ class GlassTextInput(TextInput):
         super().__init__(**kwargs)
 
         self.radius = radius
+        self.cursor_blink = False
+        self._caret_visible = False
+        self._caret_event = None
+
         with self.canvas.before:
             self._fill_color = Color(*INPUT_FILL)
             self._fill_rect = RoundedRectangle(radius=[self.radius])
         with self.canvas.after:
             self._border_color = Color(*INPUT_BORDER)
             self._border_line = Line(width=1.05)
+            self._caret_color = Color(0.56, 0.8, 1, 0)
+            self._caret_rect = Rectangle(size=(0, 0))
 
-        self.bind(pos=self._update_canvas, size=self._update_canvas)
+        self.bind(
+            pos=self._update_canvas,
+            size=self._update_canvas,
+            focus=self._on_focus_change,
+            cursor_pos=self._refresh_caret,
+            cursor=self._show_caret_now,
+            text=self._show_caret_now,
+        )
         Clock.schedule_once(self._update_canvas, 0)
 
     def _update_canvas(self, *_):
@@ -299,6 +312,51 @@ class GlassTextInput(TextInput):
             self.height,
             self.radius,
         )
+        self._refresh_caret()
+
+    def _on_focus_change(self, *_):
+        if self.focus:
+            self._show_caret_now()
+            if self._caret_event is None:
+                self._caret_event = Clock.schedule_interval(self._toggle_caret, 0.55)
+        else:
+            if self._caret_event is not None:
+                self._caret_event.cancel()
+                self._caret_event = None
+            self._caret_visible = False
+            self._refresh_caret()
+
+    def _toggle_caret(self, *_):
+        if not self.focus:
+            self._caret_visible = False
+            self._refresh_caret()
+            return False
+        self._caret_visible = not self._caret_visible
+        self._refresh_caret()
+        return True
+
+    def _show_caret_now(self, *_):
+        if self.focus:
+            self._caret_visible = True
+            self._refresh_caret()
+
+    def _refresh_caret(self, *_):
+        if not self.focus or not self._caret_visible:
+            self._caret_color.rgba = (self.cursor_color[0], self.cursor_color[1], self.cursor_color[2], 0)
+            self._caret_rect.size = (0, 0)
+            return
+
+        inner_height = max(self.height - self.padding[1] - self.padding[3], dp(16))
+        effective_line_height = self.line_height if self.line_height > 2 else self.font_size * 1.15
+        caret_height = min(inner_height, max(effective_line_height, self.font_size * 1.0))
+
+        cursor_x, cursor_top = self.cursor_pos
+        caret_x = min(max(cursor_x, self.x + self.padding[0]), self.right - self.padding[2] - self.cursor_width)
+        caret_y = cursor_top - caret_height
+
+        self._caret_color.rgba = self.cursor_color
+        self._caret_rect.pos = (caret_x, caret_y)
+        self._caret_rect.size = (self.cursor_width, caret_height)
 
 
 class DarkSpinnerOption(SpinnerOption):

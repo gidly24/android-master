@@ -9,6 +9,9 @@ ui/__pycache__/
 tasks.db
 post_layout0001.png
 ui_check.png
+focus_check.png
+caret_check.png
+*_check.png
 
 .kivy/
 *.log
