@@ -1,7 +1,7 @@
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.label import Label
-from kivy.uix.popup import Popup
+from kivy.uix.modalview import ModalView
 from kivy.uix.scrollview import ScrollView
 
 from models import CATEGORIES, PRIORITY_OPTIONS, RECURRENCE_OPTIONS
@@ -17,21 +17,21 @@ from ui.components import (
 )
 
 
-class TaskFormPopup(Popup):
-    """Popup window for creating and editing tasks."""
+class TaskFormPopup(ModalView):
+    """Modal window for creating and editing tasks."""
 
     def __init__(self, on_save, task=None, **kwargs):
-        kwargs.setdefault("title", "Редактирование задачи" if task else "Новая задача")
-        kwargs.setdefault("size_hint", (0.94, 0.94))
-        kwargs.setdefault("separator_height", 1)
-        kwargs.setdefault("separator_color", (0.26, 0.34, 0.52, 1))
-        kwargs.setdefault("title_color", TEXT_PRIMARY)
-        kwargs.setdefault("background_color", (0.05, 0.07, 0.11, 1))
+        kwargs.setdefault("size_hint", (0.92, 0.92))
+        kwargs.setdefault("auto_dismiss", False)
+        kwargs.setdefault("background", "")
+        kwargs.setdefault("background_color", (0, 0, 0, 0))
         super().__init__(**kwargs)
 
         self.on_save = on_save
         self.task = task
-        self.content = self._build_content()
+        self.form_title = "Редактирование задачи" if task else "Новая задача"
+        self.overlay_color = (0.02, 0.03, 0.06, 0.78)
+        self.add_widget(self._build_content())
 
         if task:
             self._fill_data(task)
@@ -40,10 +40,24 @@ class TaskFormPopup(Popup):
         root = GlassPane(
             orientation="vertical",
             spacing=dp(10),
-            padding=dp(12),
+            padding=(dp(16), dp(18), dp(16), dp(16)),
             fill_color=(0.08, 0.11, 0.18, 1),
             border_color=(0.28, 0.37, 0.56, 0.95),
+            radius=dp(30),
         )
+
+        header = Label(
+            text=self.form_title,
+            color=TEXT_PRIMARY,
+            font_size="20sp",
+            bold=True,
+            size_hint_y=None,
+            halign="left",
+            valign="middle",
+        )
+        bind_text_size(header)
+        bind_auto_height(header, min_height=dp(30), extra=dp(4))
+        root.add_widget(header)
 
         scroll = ScrollView()
         form = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)
@@ -71,7 +85,7 @@ class TaskFormPopup(Popup):
             text="",
             color=(1, 0.56, 0.6, 1),
             size_hint_y=None,
-            height=dp(26),
+            height=dp(28),
             halign="left",
             valign="middle",
         )
