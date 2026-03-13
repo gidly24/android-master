@@ -12,27 +12,27 @@ TEXT_PRIMARY = (0.96, 0.97, 1, 1)
 TEXT_SECONDARY = (0.8, 0.84, 0.92, 1)
 TEXT_MUTED = (0.6, 0.66, 0.78, 1)
 
-SURFACE_FILL = (0.09, 0.12, 0.19, 0.98)
-SURFACE_FILL_ALT = (0.11, 0.14, 0.22, 0.98)
-SURFACE_BORDER = (0.27, 0.35, 0.52, 0.9)
-SURFACE_SHADOW = (0.0, 0.0, 0.0, 0.22)
+SURFACE_FILL = (0.1, 0.13, 0.2, 0.985)
+SURFACE_FILL_ALT = (0.12, 0.15, 0.23, 0.985)
+SURFACE_BORDER = (0.33, 0.42, 0.62, 0.58)
+SURFACE_SHADOW = (0.0, 0.0, 0.0, 0.14)
 
 INPUT_FILL = (0.07, 0.1, 0.16, 1)
-INPUT_BORDER = (0.24, 0.31, 0.48, 0.95)
+INPUT_BORDER = (0.34, 0.43, 0.64, 0.52)
 
 PRIMARY_FILL = (0.2, 0.47, 0.96, 1)
-PRIMARY_BORDER = (0.48, 0.67, 1, 0.9)
+PRIMARY_BORDER = (0.73, 0.84, 1, 0.55)
 SUCCESS_FILL = (0.12, 0.67, 0.46, 1)
-SUCCESS_BORDER = (0.44, 0.88, 0.69, 0.9)
+SUCCESS_BORDER = (0.67, 0.92, 0.8, 0.5)
 DANGER_FILL = (0.8, 0.3, 0.36, 1)
-DANGER_BORDER = (0.96, 0.57, 0.62, 0.9)
+DANGER_BORDER = (0.98, 0.72, 0.76, 0.5)
 
 CARD_ACTIVE_FILL = (0.1, 0.14, 0.23, 0.99)
-CARD_ACTIVE_BORDER = (0.31, 0.45, 0.72, 0.95)
-CARD_DONE_FILL = (0.08, 0.16, 0.14, 0.99)
-CARD_DONE_BORDER = (0.27, 0.61, 0.5, 0.95)
-CARD_OVERDUE_FILL = (0.18, 0.11, 0.14, 0.99)
-CARD_OVERDUE_BORDER = (0.66, 0.35, 0.42, 0.95)
+CARD_ACTIVE_BORDER = (0.45, 0.57, 0.83, 0.56)
+CARD_DONE_FILL = (0.09, 0.17, 0.15, 0.99)
+CARD_DONE_BORDER = (0.45, 0.72, 0.63, 0.52)
+CARD_OVERDUE_FILL = (0.19, 0.12, 0.15, 0.99)
+CARD_OVERDUE_BORDER = (0.8, 0.5, 0.56, 0.5)
 
 
 def bind_text_size(label, horizontal_padding=0):
@@ -117,9 +117,12 @@ class GlassPane(BoxLayout):
             self._fill_color = Color(*self.fill_color)
             self._fill_rect = RoundedRectangle(radius=[self.radius])
 
+            self._sheen_color = Color(1, 1, 1, 0.018)
+            self._sheen_rect = RoundedRectangle(radius=[self.radius])
+
         with self.canvas.after:
             self._border_color = Color(*self.border_color)
-            self._border_line = Line(width=1.15)
+            self._border_line = Line(width=0.85)
 
         self.bind(pos=self._update_canvas, size=self._update_canvas)
         Clock.schedule_once(self._update_canvas, 0)
@@ -141,6 +144,10 @@ class GlassPane(BoxLayout):
         self._fill_rect.pos = self.pos
         self._fill_rect.size = self.size
         self._fill_rect.radius = [self.radius]
+
+        self._sheen_rect.pos = (self.x, self.y + self.height * 0.45)
+        self._sheen_rect.size = (self.width, self.height * 0.55)
+        self._sheen_rect.radius = [self.radius]
 
         self._border_color.rgba = self.border_color
         self._border_line.rounded_rectangle = (
@@ -189,7 +196,7 @@ class GlassButton(Button):
 
         with self.canvas.after:
             self._border_color = Color(*self.border_color)
-            self._border_line = Line(width=1.05)
+            self._border_line = Line(width=0.8)
 
         self.bind(pos=self._update_canvas, size=self._update_canvas, state=self._update_state)
         Clock.schedule_once(self._update_canvas, 0)
@@ -287,7 +294,7 @@ class GlassTextInput(TextInput):
             self._fill_rect = RoundedRectangle(radius=[self.radius])
         with self.canvas.after:
             self._border_color = Color(*INPUT_BORDER)
-            self._border_line = Line(width=1.05)
+            self._border_line = Line(width=0.8)
             self._caret_color = Color(0.56, 0.8, 1, 0)
             self._caret_rect = Rectangle(size=(0, 0))
 
@@ -394,7 +401,7 @@ class GlassSpinner(Spinner):
             self._fill_rect = RoundedRectangle(radius=[self.radius])
         with self.canvas.after:
             self._border_color = Color(*INPUT_BORDER)
-            self._border_line = Line(width=1.05)
+            self._border_line = Line(width=0.8)
 
         self.bind(pos=self._update_canvas, size=self._update_canvas)
         Clock.schedule_once(self._update_canvas, 0)
@@ -459,7 +466,7 @@ class BadgeLabel(Label):
             self._fill_rect = RoundedRectangle(radius=[self.radius])
         with self.canvas.after:
             self._border_color = Color(*self.border_color)
-            self._border_line = Line(width=1.0)
+            self._border_line = Line(width=0.78)
 
         self.bind(
             pos=self._update_canvas,
