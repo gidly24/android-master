@@ -1,5 +1,10 @@
 from pathlib import Path
 
+from kivy.config import Config
+
+# Request multisample anti-aliasing before the window is created.
+Config.set("graphics", "multisamples", "8")
+
 from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
