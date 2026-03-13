@@ -1,6 +1,16 @@
 from pathlib import Path
+import ctypes
 
 from kivy.config import Config
+
+# Ask Windows to render the app in native DPI without OS bitmap scaling.
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        ctypes.windll.user32.SetProcessDPIAware()
+    except Exception:
+        pass
 
 # Request multisample anti-aliasing before the window is created.
 Config.set("graphics", "multisamples", "8")
