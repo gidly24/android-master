@@ -141,31 +141,84 @@ class TaskListScreen(Screen):
     def __init__(self, service, **kwargs):
         super().__init__(**kwargs)
         self.service = service
+        self.filters_expanded = False
         self._build_ui()
         self.refresh_tasks()
 
     def _build_ui(self):
         root = BoxLayout(orientation="vertical", spacing=dp(12))
-        root.add_widget(self._build_filters())
         root.add_widget(self._build_task_list())
         root.add_widget(self._build_footer())
         self.add_widget(root)
 
     @staticmethod
-    def _build_panel_header(text):
+    def _build_panel_header(text, right_widget=None):
         header = BoxLayout(size_hint_y=None, height=dp(36), padding=(dp(2), 0, 0, 0))
         header.add_widget(SectionTitle(text=text))
+        if right_widget is not None:
+            header.add_widget(right_widget)
         return header
 
-    def _build_filters(self):
+    def _build_task_list(self):
         container = GlassPane(
             orientation="vertical",
             spacing=dp(10),
             padding=(dp(16), dp(18), dp(16), dp(14)),
-            size_hint_y=None,
-            height=dp(220),
         )
-        container.add_widget(self._build_panel_header("Поиск и фильтрация"))
+        self.filter_hint_label = Label(
+            text="Фильтры",
+            color=TEXT_MUTED,
+            size_hint_x=None,
+            width=dp(66),
+            halign="right",
+            valign="middle",
+        )
+        bind_text_size(self.filter_hint_label)
+
+        self.filter_toggle_button = GlassButton(
+            text="|||",
+            size_hint_x=None,
+            width=dp(44),
+            height=dp(40),
+            radius=dp(20),
+            font_size="15sp",
+        )
+        self.filter_toggle_button.bind(on_release=lambda *_: self.toggle_filters())
+
+        filter_toggle_box = BoxLayout(size_hint_x=None, width=dp(118), spacing=dp(8))
+        filter_toggle_box.add_widget(self.filter_hint_label)
+        filter_toggle_box.add_widget(self.filter_toggle_button)
+
+        container.add_widget(self._build_panel_header("Список задач", filter_toggle_box))
+
+        self.filter_host = BoxLayout(
+            orientation="vertical",
+            size_hint_y=None,
+            height=0,
+            opacity=0,
+        )
+        container.add_widget(self.filter_host)
+
+        self.filter_panel = self._build_filters_panel()
+
+        self.scroll_view = ScrollView()
+        self.task_box = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)
+        self.task_box.bind(minimum_height=self.task_box.setter("height"))
+        self.scroll_view.add_widget(self.task_box)
+        container.add_widget(self.scroll_view)
+        return container
+
+    def _build_filters_panel(self):
+        container = GlassPane(
+            orientation="vertical",
+            spacing=dp(10),
+            padding=(dp(14), dp(14), dp(14), dp(12)),
+            size_hint_y=None,
+            height=dp(182),
+            fill_color=(0.07, 0.1, 0.16, 1),
+            border_color=(0.24, 0.31, 0.48, 0.95),
+            radius=dp(24),
+        )
 
         self.search_input = GlassTextInput(
             hint_text="Поиск по названию",
@@ -188,7 +241,7 @@ class TaskListScreen(Screen):
 
         button_row = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(8))
         apply_button = PrimaryGlassButton(text="Применить")
-        apply_button.bind(on_release=lambda *_: self.refresh_tasks())
+        apply_button.bind(on_release=lambda *_: self.apply_filters())
 
         reset_button = GlassButton(text="Сбросить")
         reset_button.bind(on_release=lambda *_: self.reset_filters())
@@ -199,21 +252,6 @@ class TaskListScreen(Screen):
         container.add_widget(self.search_input)
         container.add_widget(filter_row)
         container.add_widget(button_row)
-        return container
-
-    def _build_task_list(self):
-        container = GlassPane(
-            orientation="vertical",
-            spacing=dp(10),
-            padding=(dp(16), dp(18), dp(16), dp(14)),
-        )
-        container.add_widget(self._build_panel_header("Список задач"))
-
-        self.scroll_view = ScrollView()
-        self.task_box = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)
-        self.task_box.bind(minimum_height=self.task_box.setter("height"))
-        self.scroll_view.add_widget(self.task_box)
-        container.add_widget(self.scroll_view)
         return container
 
     def _build_footer(self):
@@ -261,11 +299,48 @@ class TaskListScreen(Screen):
 
         self.task_box.add_widget(Widget(size_hint_y=None, height=dp(8)))
 
+    def toggle_filters(self):
+        self.filters_expanded = not self.filters_expanded
+        self._sync_filter_panel()
+
+    def _sync_filter_panel(self):
+        if self.filters_expanded:
+            if self.filter_panel.parent is None:
+                self.filter_host.add_widget(self.filter_panel)
+            self.filter_host.height = self.filter_panel.height
+            self.filter_host.opacity = 1
+            self.filter_hint_label.text = "Скрыть"
+            self.filter_toggle_button.text = "X"
+            self.filter_toggle_button.set_palette(
+                fill_color=(0.16, 0.32, 0.68, 1),
+                border_color=(0.44, 0.63, 1, 0.95),
+                text_color=(1, 1, 1, 1),
+            )
+        else:
+            if self.filter_panel.parent is self.filter_host:
+                self.filter_host.remove_widget(self.filter_panel)
+            self.filter_host.height = 0
+            self.filter_host.opacity = 0
+            self.filter_hint_label.text = "Фильтры"
+            self.filter_toggle_button.text = "|||"
+            self.filter_toggle_button.set_palette(
+                fill_color=(0.11, 0.14, 0.22, 0.98),
+                border_color=(0.27, 0.35, 0.52, 0.9),
+                text_color=TEXT_PRIMARY,
+            )
+
+    def apply_filters(self):
+        self.refresh_tasks()
+        self.filters_expanded = False
+        self._sync_filter_panel()
+
     def reset_filters(self):
         self.search_input.text = ""
         self.status_spinner.text = "все"
         self.category_spinner.text = "все"
         self.refresh_tasks()
+        self.filters_expanded = False
+        self._sync_filter_panel()
 
     def open_task_form(self, task_id=None):
         task = self.service.get_task(task_id) if task_id else None
