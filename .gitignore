@@ -1,0 +1,14 @@
+.idea/
+.venv/
+__pycache__/
+ui/__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+tasks.db
+post_layout0001.png
+ui_check.png
+
+.kivy/
+*.log
