@@ -1,4 +1,4 @@
-from calendar import month_name, monthcalendar
+from calendar import monthcalendar
 from datetime import date as date_cls
 
 from kivy.metrics import dp
@@ -187,10 +187,24 @@ class CalendarPickerModal(ModalView):
     """Simple built-in calendar picker for task due dates."""
 
     WEEKDAY_NAMES = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"]
+    MONTH_NAMES = {
+        1: "Январь",
+        2: "Февраль",
+        3: "Март",
+        4: "Апрель",
+        5: "Май",
+        6: "Июнь",
+        7: "Июль",
+        8: "Август",
+        9: "Сентябрь",
+        10: "Октябрь",
+        11: "Ноябрь",
+        12: "Декабрь",
+    }
 
     def __init__(self, initial_date: str, on_select, **kwargs):
         kwargs.setdefault("size_hint", (0.9, None))
-        kwargs.setdefault("height", dp(420))
+        kwargs.setdefault("height", dp(520))
         kwargs.setdefault("auto_dismiss", True)
         kwargs.setdefault("background", "")
         kwargs.setdefault("background_color", (0, 0, 0, 0))
@@ -242,11 +256,21 @@ class CalendarPickerModal(ModalView):
         )
         bind_text_size(self.month_label)
 
+        self.year_spinner = GlassSpinner(
+            text=str(self.display_year),
+            values=tuple(str(year) for year in range(self.display_year - 10, self.display_year + 11)),
+            size_hint_x=None,
+            width=dp(116),
+            height=dp(44),
+        )
+        self.year_spinner.bind(text=self.on_year_selected)
+
         next_button = GlassButton(text=">", size_hint_x=None, width=dp(44), height=dp(44))
         next_button.bind(on_release=lambda *_: self.shift_month(1))
 
         header.add_widget(prev_button)
         header.add_widget(self.month_label)
+        header.add_widget(self.year_spinner)
         header.add_widget(next_button)
         root.add_widget(header)
 
@@ -261,7 +285,12 @@ class CalendarPickerModal(ModalView):
             weekdays.add_widget(label)
         root.add_widget(weekdays)
 
-        self.days_box = BoxLayout(orientation="vertical", spacing=dp(6))
+        self.days_box = BoxLayout(
+            orientation="vertical",
+            spacing=dp(6),
+            size_hint_y=None,
+            height=dp(282),
+        )
         root.add_widget(self.days_box)
 
         footer = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
@@ -277,7 +306,8 @@ class CalendarPickerModal(ModalView):
         return root
 
     def refresh_days(self):
-        self.month_label.text = f"{self._month_title()} {self.display_year}"
+        self.month_label.text = self.MONTH_NAMES[self.display_month]
+        self.year_spinner.text = str(self.display_year)
         self.days_box.clear_widgets()
 
         month_rows = monthcalendar(self.display_year, self.display_month)
@@ -324,6 +354,15 @@ class CalendarPickerModal(ModalView):
             year += 1
         self.display_month = month
         self.display_year = year
+        self._sync_year_values()
+        self.refresh_days()
+
+    def on_year_selected(self, *_):
+        try:
+            self.display_year = int(self.year_spinner.text)
+        except ValueError:
+            return
+        self._sync_year_values()
         self.refresh_days()
 
     def select_date(self, value: date_cls):
@@ -337,20 +376,7 @@ class CalendarPickerModal(ModalView):
         self.on_select(today.isoformat())
         self.dismiss()
 
-    def _month_title(self):
-        english = month_name[self.display_month]
-        names = {
-            "January": "Январь",
-            "February": "Февраль",
-            "March": "Март",
-            "April": "Апрель",
-            "May": "Май",
-            "June": "Июнь",
-            "July": "Июль",
-            "August": "Август",
-            "September": "Сентябрь",
-            "October": "Октябрь",
-            "November": "Ноябрь",
-            "December": "Декабрь",
-        }
-        return names.get(english, english)
+    def _sync_year_values(self):
+        self.year_spinner.values = tuple(
+            str(year) for year in range(self.display_year - 10, self.display_year + 11)
+        )
