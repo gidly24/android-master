@@ -32,7 +32,7 @@ class TaskControlApp(App):
 
     def build(self):
         self.title = "Контроль сроков задач"
-        Window.clearcolor = (0.04, 0.06, 0.1, 1)
+        Window.clearcolor = (0.95, 0.96, 0.98, 1)
         Window.size = (430, 780)
 
         database_path = Path(__file__).resolve().parent / "tasks.db"
@@ -94,15 +94,15 @@ class TaskControlApp(App):
         for name, button in self.nav_buttons.items():
             if name == active_name:
                 button.set_palette(
-                    fill_color=(0.2, 0.47, 0.96, 1),
-                    border_color=(0.48, 0.67, 1, 0.9),
+                    fill_color=(0.33, 0.66, 0.95, 1),
+                    border_color=(0.33, 0.66, 0.95, 1),
                     text_color=(1, 1, 1, 1),
                 )
             else:
                 button.set_palette(
-                    fill_color=(0.1, 0.14, 0.22, 0.98),
-                    border_color=(0.27, 0.35, 0.52, 0.9),
-                    text_color=(0.95, 0.97, 1, 1),
+                    fill_color=(1, 1, 1, 0.98),
+                    border_color=(0.84, 0.87, 0.92, 1),
+                    text_color=(0.17, 0.19, 0.24, 1),
                 )
 
     def _force_layout_pass(self, *_):

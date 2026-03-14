@@ -35,7 +35,7 @@ class TaskFormPopup(ModalView):
         self.on_save = on_save
         self.task = task
         self.form_title = "Редактирование задачи" if task else "Новая задача"
-        self.overlay_color = (0.02, 0.03, 0.06, 0.78)
+        self.overlay_color = (0.1, 0.13, 0.2, 0.24)
         self.add_widget(self._build_content())
 
         if task:
@@ -46,8 +46,8 @@ class TaskFormPopup(ModalView):
             orientation="vertical",
             spacing=dp(10),
             padding=(dp(16), dp(18), dp(16), dp(16)),
-            fill_color=(0.08, 0.11, 0.18, 1),
-            border_color=(0.28, 0.37, 0.56, 0.95),
+            fill_color=(1, 1, 1, 1),
+            border_color=(0.85, 0.87, 0.91, 1),
             radius=dp(30),
         )
 
@@ -99,7 +99,7 @@ class TaskFormPopup(ModalView):
 
         self.message_label = Label(
             text="",
-            color=(1, 0.56, 0.6, 1),
+            color=(0.9, 0.32, 0.39, 1),
             size_hint_y=None,
             height=dp(28),
             halign="left",
@@ -210,7 +210,7 @@ class CalendarPickerModal(ModalView):
         kwargs.setdefault("background_color", (0, 0, 0, 0))
         super().__init__(**kwargs)
 
-        self.overlay_color = (0.02, 0.03, 0.06, 0.78)
+        self.overlay_color = (0.1, 0.13, 0.2, 0.24)
         self.on_select = on_select
         self.current_date = date_cls.fromisoformat(initial_date)
         self.display_year = self.current_date.year
@@ -225,8 +225,8 @@ class CalendarPickerModal(ModalView):
             orientation="vertical",
             spacing=dp(12),
             padding=(dp(16), dp(18), dp(16), dp(16)),
-            fill_color=(0.08, 0.11, 0.18, 1),
-            border_color=(0.28, 0.37, 0.56, 0.95),
+            fill_color=(1, 1, 1, 1),
+            border_color=(0.85, 0.87, 0.91, 1),
             radius=dp(30),
         )
 

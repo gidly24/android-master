@@ -8,31 +8,31 @@ from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.textinput import TextInput
 
 
-TEXT_PRIMARY = (0.96, 0.97, 1, 1)
-TEXT_SECONDARY = (0.8, 0.84, 0.92, 1)
-TEXT_MUTED = (0.6, 0.66, 0.78, 1)
+TEXT_PRIMARY = (0.1, 0.11, 0.14, 1)
+TEXT_SECONDARY = (0.35, 0.39, 0.46, 1)
+TEXT_MUTED = (0.54, 0.57, 0.63, 1)
 
-SURFACE_FILL = (0.1, 0.13, 0.2, 0.985)
-SURFACE_FILL_ALT = (0.12, 0.15, 0.23, 0.985)
-SURFACE_BORDER = (0.33, 0.42, 0.62, 0.58)
-SURFACE_SHADOW = (0.0, 0.0, 0.0, 0.14)
+SURFACE_FILL = (1, 1, 1, 0.98)
+SURFACE_FILL_ALT = (0.96, 0.97, 0.99, 0.99)
+SURFACE_BORDER = (0.85, 0.87, 0.91, 1)
+SURFACE_SHADOW = (0.49, 0.55, 0.66, 0.12)
 
-INPUT_FILL = (0.07, 0.1, 0.16, 1)
-INPUT_BORDER = (0.34, 0.43, 0.64, 0.52)
+INPUT_FILL = (0.96, 0.97, 0.99, 1)
+INPUT_BORDER = (0.84, 0.87, 0.92, 1)
 
-PRIMARY_FILL = (0.2, 0.47, 0.96, 1)
-PRIMARY_BORDER = (0.73, 0.84, 1, 0.55)
-SUCCESS_FILL = (0.12, 0.67, 0.46, 1)
-SUCCESS_BORDER = (0.67, 0.92, 0.8, 0.5)
-DANGER_FILL = (0.8, 0.3, 0.36, 1)
-DANGER_BORDER = (0.98, 0.72, 0.76, 0.5)
+PRIMARY_FILL = (0.33, 0.66, 0.95, 1)
+PRIMARY_BORDER = (0.33, 0.66, 0.95, 1)
+SUCCESS_FILL = (0.34, 0.75, 0.52, 1)
+SUCCESS_BORDER = (0.34, 0.75, 0.52, 1)
+DANGER_FILL = (0.94, 0.47, 0.5, 1)
+DANGER_BORDER = (0.94, 0.47, 0.5, 1)
 
-CARD_ACTIVE_FILL = (0.1, 0.14, 0.23, 0.99)
-CARD_ACTIVE_BORDER = (0.45, 0.57, 0.83, 0.56)
-CARD_DONE_FILL = (0.09, 0.17, 0.15, 0.99)
-CARD_DONE_BORDER = (0.45, 0.72, 0.63, 0.52)
-CARD_OVERDUE_FILL = (0.19, 0.12, 0.15, 0.99)
-CARD_OVERDUE_BORDER = (0.8, 0.5, 0.56, 0.5)
+CARD_ACTIVE_FILL = (0.35, 0.66, 0.95, 1)
+CARD_ACTIVE_BORDER = (0.35, 0.66, 0.95, 1)
+CARD_DONE_FILL = (0.63, 0.67, 0.71, 1)
+CARD_DONE_BORDER = (0.63, 0.67, 0.71, 1)
+CARD_OVERDUE_FILL = (0.94, 0.55, 0.58, 1)
+CARD_OVERDUE_BORDER = (0.94, 0.55, 0.58, 1)
 
 
 def bind_text_size(label, horizontal_padding=0):
@@ -67,19 +67,20 @@ class GlassRoot(BoxLayout):
             self._bg_color = Color(0.04, 0.06, 0.1, 1)
             self._bg_rect = Rectangle()
 
-            self._blob_one_color = Color(0.15, 0.31, 0.62, 0.18)
+            self._blob_one_color = Color(0.37, 0.67, 0.97, 0.18)
             self._blob_one = Ellipse()
 
-            self._blob_two_color = Color(0.15, 0.62, 0.47, 0.12)
+            self._blob_two_color = Color(0.97, 0.73, 0.37, 0.15)
             self._blob_two = Ellipse()
 
-            self._blob_three_color = Color(0.64, 0.29, 0.47, 0.1)
+            self._blob_three_color = Color(0.92, 0.53, 0.67, 0.12)
             self._blob_three = Ellipse()
 
         self.bind(pos=self._update_canvas, size=self._update_canvas)
         Clock.schedule_once(self._update_canvas, 0)
 
     def _update_canvas(self, *_):
+        self._bg_color.rgba = (0.95, 0.96, 0.98, 1)
         self._bg_rect.pos = self.pos
         self._bg_rect.size = self.size
 
@@ -94,7 +95,7 @@ class GlassRoot(BoxLayout):
 
 
 class GlassPane(BoxLayout):
-    """Rounded dark panel with border and shadow."""
+    """Rounded panel with subtle border and shadow."""
 
     def __init__(
         self,
@@ -116,9 +117,6 @@ class GlassPane(BoxLayout):
 
             self._fill_color = Color(*self.fill_color)
             self._fill_rect = RoundedRectangle(radius=[self.radius])
-
-            self._sheen_color = Color(1, 1, 1, 0.018)
-            self._sheen_rect = RoundedRectangle(radius=[self.radius])
 
         with self.canvas.after:
             self._border_color = Color(*self.border_color)
@@ -144,10 +142,6 @@ class GlassPane(BoxLayout):
         self._fill_rect.pos = self.pos
         self._fill_rect.size = self.size
         self._fill_rect.radius = [self.radius]
-
-        self._sheen_rect.pos = (self.x, self.y + self.height * 0.45)
-        self._sheen_rect.size = (self.width, self.height * 0.55)
-        self._sheen_rect.radius = [self.radius]
 
         self._border_color.rgba = self.border_color
         self._border_line.rounded_rectangle = (
@@ -274,7 +268,7 @@ class GlassTextInput(TextInput):
         kwargs.setdefault("background_active", "")
         kwargs.setdefault("background_color", (0, 0, 0, 0))
         kwargs.setdefault("foreground_color", TEXT_PRIMARY)
-        kwargs.setdefault("cursor_color", (0.56, 0.8, 1, 1))
+        kwargs.setdefault("cursor_color", (0.2, 0.54, 0.95, 1))
         kwargs.setdefault("cursor_width", dp(2.2))
         kwargs.setdefault("hint_text_color", TEXT_MUTED)
         kwargs.setdefault("selection_color", (0.34, 0.56, 0.98, 0.35))
@@ -295,7 +289,7 @@ class GlassTextInput(TextInput):
         with self.canvas.after:
             self._border_color = Color(*INPUT_BORDER)
             self._border_line = Line(width=0.8)
-            self._caret_color = Color(0.56, 0.8, 1, 0)
+            self._caret_color = Color(0.2, 0.54, 0.95, 0)
             self._caret_rect = Rectangle(size=(0, 0))
 
         self.bind(
