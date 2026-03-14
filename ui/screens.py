@@ -1,6 +1,5 @@
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
-from kivy.uix.gridlayout import GridLayout
 from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.screenmanager import Screen
@@ -30,12 +29,6 @@ from ui.components import (
     bind_text_size,
 )
 from ui.forms import TaskFormPopup
-
-SUMMARY_CARDS = [
-    ("Активные", CARD_ACTIVE_FILL, "активна"),
-    ("Просроченные", CARD_OVERDUE_FILL, "просрочена"),
-    ("Выполненные", CARD_DONE_FILL, "выполнена"),
-]
 
 
 class TaskRow(GlassPane):
@@ -168,55 +161,14 @@ class TaskListScreen(Screen):
         super().__init__(**kwargs)
         self.service = service
         self.filters_expanded = False
-        self.view_mode = "list"
         self._build_ui()
         self.refresh_tasks()
 
     def _build_ui(self):
         root = BoxLayout(orientation="vertical", spacing=dp(12))
-        root.add_widget(self._build_summary_cards())
         root.add_widget(self._build_task_list())
         root.add_widget(self._build_footer())
         self.add_widget(root)
-
-    def _build_summary_cards(self):
-        container = BoxLayout(size_hint_y=None, height=dp(118), spacing=dp(10))
-        self.summary_labels = {}
-
-        for title, color, key in SUMMARY_CARDS:
-            card = GlassPane(
-                orientation="vertical",
-                padding=(dp(12), dp(12), dp(12), dp(10)),
-                spacing=dp(2),
-                fill_color=color,
-                border_color=color,
-                radius=dp(24),
-            )
-            name_label = Label(
-                text=title,
-                color=(1, 1, 1, 0.96),
-                font_size="14sp",
-                bold=True,
-                size_hint_y=None,
-                height=dp(24),
-                halign="left",
-                valign="middle",
-            )
-            bind_text_size(name_label)
-            value_label = Label(
-                text="0",
-                color=(1, 1, 1, 1),
-                font_size="32sp",
-                bold=True,
-                halign="right",
-                valign="middle",
-            )
-            card.add_widget(name_label)
-            card.add_widget(value_label)
-            self.summary_labels[key] = value_label
-            container.add_widget(card)
-
-        return container
 
     @staticmethod
     def _build_panel_header(text, right_widget=None):
@@ -233,30 +185,19 @@ class TaskListScreen(Screen):
             padding=(dp(16), dp(18), dp(16), dp(14)),
         )
 
-        controls = BoxLayout(size_hint_x=None, width=dp(164), spacing=dp(8))
+        controls = BoxLayout(size_hint_x=None, width=dp(56))
 
         self.filter_toggle_button = GlassButton(
-            text="Ф",
+            text="≡",
             size_hint_x=None,
             width=dp(48),
             height=dp(40),
             radius=dp(20),
-            font_size="15sp",
+            font_size="18sp",
         )
         self.filter_toggle_button.bind(on_release=lambda *_: self.toggle_filters())
 
-        self.view_toggle_button = GlassButton(
-            text="Список",
-            size_hint_x=None,
-            width=dp(108),
-            height=dp(40),
-            radius=dp(20),
-            font_size="13sp",
-        )
-        self.view_toggle_button.bind(on_release=lambda *_: self.toggle_view_mode())
-
         controls.add_widget(self.filter_toggle_button)
-        controls.add_widget(self.view_toggle_button)
 
         container.add_widget(self._build_panel_header("Список задач", controls))
 
@@ -271,12 +212,17 @@ class TaskListScreen(Screen):
         self.filter_panel = self._build_filters_panel()
 
         self.scroll_view = ScrollView(bar_width=dp(4), scroll_type=["bars", "content"])
-        self.task_container = None
-        self._rebuild_task_container()
+        self.task_container = BoxLayout(
+            orientation="vertical",
+            spacing=dp(10),
+            size_hint_y=None,
+            padding=(0, 0, 0, dp(4)),
+        )
+        self.task_container.bind(minimum_height=self.task_container.setter("height"))
+        self.scroll_view.add_widget(self.task_container)
         container.add_widget(self.scroll_view)
 
         self._sync_filter_panel()
-        self._sync_view_button()
         return container
 
     def _build_filters_panel(self):
@@ -337,28 +283,6 @@ class TaskListScreen(Screen):
         footer.add_widget(add_button)
         return footer
 
-    def _rebuild_task_container(self):
-        if self.task_container is not None:
-            self.scroll_view.remove_widget(self.task_container)
-
-        if self.view_mode == "tile":
-            self.task_container = GridLayout(
-                cols=2,
-                spacing=dp(10),
-                size_hint_y=None,
-                padding=(0, 0, 0, dp(4)),
-            )
-        else:
-            self.task_container = BoxLayout(
-                orientation="vertical",
-                spacing=dp(10),
-                size_hint_y=None,
-                padding=(0, 0, 0, dp(4)),
-            )
-
-        self.task_container.bind(minimum_height=self.task_container.setter("height"))
-        self.scroll_view.add_widget(self.task_container)
-
     def refresh_tasks(self):
         self.task_container.clear_widgets()
         tasks = self.service.get_tasks(
@@ -366,8 +290,6 @@ class TaskListScreen(Screen):
             category_filter=self.category_spinner.text,
             search_text=self.search_input.text.strip(),
         )
-
-        self._refresh_summary(tasks)
 
         if not tasks:
             empty_label = Label(
@@ -388,23 +310,10 @@ class TaskListScreen(Screen):
                 on_edit=self.open_task_form,
                 on_delete=self.confirm_delete,
                 on_complete=self.complete_task,
-                compact=self.view_mode == "tile",
             )
-            if self.view_mode == "tile":
-                row.size_hint_y = None
-                row.height = dp(208)
             self.task_container.add_widget(row)
 
         self.task_container.add_widget(Widget(size_hint_y=None, height=dp(8)))
-
-    def _refresh_summary(self, tasks):
-        counts = {
-            "активна": len([task for task in tasks if task.status == "активна"]),
-            "просрочена": len([task for task in tasks if task.status == "просрочена"]),
-            "выполнена": len([task for task in tasks if task.status == "выполнена"]),
-        }
-        for key, label in self.summary_labels.items():
-            label.text = str(counts.get(key, 0))
 
     def toggle_filters(self):
         self.filters_expanded = not self.filters_expanded
@@ -416,7 +325,7 @@ class TaskListScreen(Screen):
                 self.filter_host.add_widget(self.filter_panel)
             self.filter_host.height = self.filter_panel.height
             self.filter_host.opacity = 1
-            self.filter_toggle_button.text = "X"
+            self.filter_toggle_button.text = "×"
             self.filter_toggle_button.set_palette(
                 fill_color=(0.91, 0.95, 1, 1),
                 border_color=(0.33, 0.66, 0.95, 1),
@@ -427,29 +336,12 @@ class TaskListScreen(Screen):
                 self.filter_host.remove_widget(self.filter_panel)
             self.filter_host.height = 0
             self.filter_host.opacity = 0
-            self.filter_toggle_button.text = "Ф"
+            self.filter_toggle_button.text = "≡"
             self.filter_toggle_button.set_palette(
                 fill_color=(1, 1, 1, 0.98),
                 border_color=(0.84, 0.87, 0.92, 1),
                 text_color=TEXT_PRIMARY,
             )
-
-    def toggle_view_mode(self):
-        self.view_mode = "tile" if self.view_mode == "list" else "list"
-        self._rebuild_task_container()
-        self._sync_view_button()
-        self.refresh_tasks()
-
-    def _sync_view_button(self):
-        if self.view_mode == "tile":
-            self.view_toggle_button.text = "Плитка"
-        else:
-            self.view_toggle_button.text = "Список"
-        self.view_toggle_button.set_palette(
-            fill_color=(1, 1, 1, 0.98),
-            border_color=(0.84, 0.87, 0.92, 1),
-            text_color=TEXT_PRIMARY,
-        )
 
     def apply_filters(self):
         self.refresh_tasks()
