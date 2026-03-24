@@ -17,3 +17,8 @@ text_visibility_check*.png
 
 .kivy/
 *.log
+.buildozer/
+.venv-linux/
+bin/
+Python-3.11.5.tgz
+setuptools-51.3.3.tar.gz

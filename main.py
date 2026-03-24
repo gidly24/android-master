@@ -1,16 +1,19 @@
 from pathlib import Path
-import ctypes
+import sys
 
 from kivy.config import Config
 
 # Ask Windows to render the app in native DPI without OS bitmap scaling.
-try:
-    ctypes.windll.shcore.SetProcessDpiAwareness(2)
-except Exception:
+if sys.platform == "win32":
     try:
-        ctypes.windll.user32.SetProcessDPIAware()
+        import ctypes
+
+        ctypes.windll.shcore.SetProcessDpiAwareness(2)
     except Exception:
-        pass
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
 
 # Request multisample anti-aliasing before the window is created.
 Config.set("graphics", "multisamples", "8")
@@ -20,6 +23,7 @@ from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.metrics import dp
 from kivy.uix.screenmanager import NoTransition, ScreenManager
+from kivy.utils import platform
 
 from database import DatabaseManager
 from services import TaskService
@@ -33,7 +37,8 @@ class TaskControlApp(App):
     def build(self):
         self.title = "Контроль сроков задач"
         Window.clearcolor = (0.95, 0.96, 0.98, 1)
-        Window.size = (430, 780)
+        if platform not in ("android", "ios"):
+            Window.size = (430, 780)
 
         database_path = Path(__file__).resolve().parent / "tasks.db"
         self.database = DatabaseManager(database_path)
