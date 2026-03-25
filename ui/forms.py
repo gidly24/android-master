@@ -10,6 +10,7 @@ from kivy.uix.scrollview import ScrollView
 from models import CATEGORIES, PRIORITY_OPTIONS, RECURRENCE_OPTIONS
 from ui.components import (
     DangerGlassButton,
+    FONT_SIZE,
     GlassPane,
     GlassSpinner,
     GlassTextInput,
@@ -40,6 +41,8 @@ class TaskFormPopup(ModalView):
 
         if task:
             self._fill_data(task)
+        else:
+            self.due_time_input.text = "23:59"
 
     def _build_content(self):
         root = GlassPane(
@@ -54,7 +57,7 @@ class TaskFormPopup(ModalView):
         header = Label(
             text=self.form_title,
             color=TEXT_PRIMARY,
-            font_size="20sp",
+            font_size=FONT_SIZE,
             bold=True,
             size_hint_y=None,
             halign="left",
@@ -74,11 +77,18 @@ class TaskFormPopup(ModalView):
             height=dp(120),
             hint_text="Краткое описание или комментарий",
         )
-        self.category_spinner = GlassSpinner(text=CATEGORIES[0], values=tuple(CATEGORIES))
+        category_values = tuple(category.capitalize() for category in CATEGORIES)
+        self.category_spinner = GlassSpinner(text=category_values[0], values=category_values)
         self.due_date_input = GlassTextInput(
             multiline=False,
             hint_text="Выберите дату",
             readonly=True,
+        )
+        self.due_time_input = GlassTextInput(
+            multiline=False,
+            hint_text="ЧЧ:ММ",
+            size_hint_x=None,
+            width=dp(96),
         )
         self.date_picker_button = GlassButton(
             text="Календарь",
@@ -87,8 +97,10 @@ class TaskFormPopup(ModalView):
             height=dp(50),
         )
         self.date_picker_button.bind(on_release=lambda *_: self.open_calendar())
-        self.recurrence_spinner = GlassSpinner(text=RECURRENCE_OPTIONS[0], values=tuple(RECURRENCE_OPTIONS))
-        self.priority_spinner = GlassSpinner(text=PRIORITY_OPTIONS[1], values=tuple(PRIORITY_OPTIONS))
+        recurrence_values = tuple(value.capitalize() for value in RECURRENCE_OPTIONS)
+        priority_values = tuple(value.capitalize() for value in PRIORITY_OPTIONS)
+        self.recurrence_spinner = GlassSpinner(text=recurrence_values[0], values=recurrence_values)
+        self.priority_spinner = GlassSpinner(text=priority_values[1], values=priority_values)
 
         form.add_widget(self._build_field("Название", self.title_input))
         form.add_widget(self._build_field("Описание", self.description_input))
@@ -104,6 +116,7 @@ class TaskFormPopup(ModalView):
             height=dp(28),
             halign="left",
             valign="middle",
+            font_size=FONT_SIZE,
         )
         bind_text_size(self.message_label)
         form.add_widget(self.message_label)
@@ -132,6 +145,7 @@ class TaskFormPopup(ModalView):
             size_hint_y=None,
             halign="left",
             valign="middle",
+            font_size=FONT_SIZE,
         )
         bind_text_size(title)
         bind_auto_height(title, min_height=dp(22), extra=dp(4))
@@ -144,16 +158,18 @@ class TaskFormPopup(ModalView):
     def _build_date_field(self):
         row = BoxLayout(size_hint_y=None, height=dp(50), spacing=dp(8))
         row.add_widget(self.due_date_input)
+        row.add_widget(self.due_time_input)
         row.add_widget(self.date_picker_button)
         return self._build_field("Дата ближайшего выполнения", row)
 
     def _fill_data(self, task):
         self.title_input.text = task.title
         self.description_input.text = task.description
-        self.category_spinner.text = task.category
+        self.category_spinner.text = task.category.capitalize()
         self.due_date_input.text = task.due_date
-        self.recurrence_spinner.text = task.recurrence
-        self.priority_spinner.text = task.priority
+        self.due_time_input.text = task.due_time
+        self.recurrence_spinner.text = task.recurrence.capitalize()
+        self.priority_spinner.text = task.priority.capitalize()
 
     def _handle_save(self):
         task_data = {
@@ -161,6 +177,7 @@ class TaskFormPopup(ModalView):
             "description": self.description_input.text,
             "category": self.category_spinner.text,
             "due_date": self.due_date_input.text.strip(),
+            "due_time": self.due_time_input.text.strip() or "23:59",
             "recurrence": self.recurrence_spinner.text,
             "priority": self.priority_spinner.text,
             "status": self.task.status if self.task else "активна",
@@ -233,7 +250,7 @@ class CalendarPickerModal(ModalView):
         title = Label(
             text="Выбор даты",
             color=TEXT_PRIMARY,
-            font_size="20sp",
+            font_size=FONT_SIZE,
             bold=True,
             size_hint_y=None,
             halign="left",
@@ -249,7 +266,7 @@ class CalendarPickerModal(ModalView):
 
         self.month_label = Label(
             color=TEXT_PRIMARY,
-            font_size="17sp",
+            font_size=FONT_SIZE,
             bold=True,
             halign="center",
             valign="middle",
@@ -279,7 +296,7 @@ class CalendarPickerModal(ModalView):
             label = Label(
                 text=day_name,
                 color=TEXT_MUTED,
-                font_size="13sp",
+                font_size=FONT_SIZE,
                 bold=True,
             )
             weekdays.add_widget(label)
@@ -318,7 +335,7 @@ class CalendarPickerModal(ModalView):
             row = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(4))
             for day_number in week:
                 if day_number == 0:
-                    row.add_widget(Label(text=""))
+                    row.add_widget(Label(text="", font_size=FONT_SIZE))
                     continue
 
                 current = date_cls(self.display_year, self.display_month, day_number)

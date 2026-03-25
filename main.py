@@ -28,7 +28,7 @@ from kivy.utils import platform
 from database import DatabaseManager
 from services import TaskService
 from ui.components import GlassButton, GlassPane, GlassRoot, PrimaryGlassButton
-from ui.screens import StatsScreen, TaskListScreen
+from ui.screens import ArchiveScreen, StatsScreen, TaskListScreen
 
 
 class TaskControlApp(App):
@@ -68,21 +68,40 @@ class TaskControlApp(App):
         tasks_button = PrimaryGlassButton(text="Задачи")
         tasks_button.bind(on_release=lambda *_: self.switch_screen("tasks"))
 
+        archive_button = GlassButton(text="Архив")
+        archive_button.bind(on_release=lambda *_: self.switch_screen("archive"))
+
         stats_button = GlassButton(text="Статистика")
         stats_button.bind(on_release=lambda *_: self.switch_screen("stats"))
 
-        self.nav_buttons = {"tasks": tasks_button, "stats": stats_button}
+        self.nav_buttons = {"tasks": tasks_button, "archive": archive_button, "stats": stats_button}
         navigation.add_widget(tasks_button)
+        navigation.add_widget(archive_button)
         navigation.add_widget(stats_button)
         return navigation
 
     def _build_screens(self):
         self.screen_manager = ScreenManager(transition=NoTransition())
-        self.task_list_screen = TaskListScreen(name="tasks", service=self.service)
+        self.task_list_screen = TaskListScreen(
+            name="tasks",
+            service=self.service,
+            on_tasks_changed=self.refresh_all_screens,
+        )
+        self.archive_screen = ArchiveScreen(
+            name="archive",
+            service=self.service,
+            on_delete=self.task_list_screen.confirm_delete,
+        )
         self.stats_screen = StatsScreen(name="stats", service=self.service)
         self.screen_manager.add_widget(self.task_list_screen)
+        self.screen_manager.add_widget(self.archive_screen)
         self.screen_manager.add_widget(self.stats_screen)
         return self.screen_manager
+
+    def refresh_all_screens(self):
+        self.task_list_screen.refresh_tasks()
+        self.archive_screen.refresh_archive()
+        self.stats_screen.refresh_stats()
 
     def switch_screen(self, screen_name):
         self.screen_manager.current = screen_name
@@ -90,6 +109,8 @@ class TaskControlApp(App):
 
         if screen_name == "tasks":
             self.task_list_screen.refresh_tasks()
+        if screen_name == "archive":
+            self.archive_screen.refresh_archive()
         if screen_name == "stats":
             self.stats_screen.refresh_stats()
 

@@ -34,6 +34,8 @@ CARD_DONE_BORDER = (0.63, 0.67, 0.71, 1)
 CARD_OVERDUE_FILL = (0.94, 0.55, 0.58, 1)
 CARD_OVERDUE_BORDER = (0.94, 0.55, 0.58, 1)
 
+FONT_SIZE = "14sp"
+
 
 def bind_text_size(label, horizontal_padding=0):
     """Bind label width to text wrapping width."""
@@ -169,7 +171,7 @@ class GlassButton(Button):
         kwargs.setdefault("background_down", "")
         kwargs.setdefault("background_color", (0, 0, 0, 0))
         kwargs.setdefault("color", text_color)
-        kwargs.setdefault("font_size", "14sp")
+        kwargs.setdefault("font_size", FONT_SIZE)
         kwargs.setdefault("bold", True)
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(42))
@@ -260,6 +262,34 @@ class DangerGlassButton(GlassButton):
         super().__init__(**kwargs)
 
 
+class CheckIconButton(SuccessGlassButton):
+    """Circular success button with a drawn checkmark."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("text", "")
+        kwargs.setdefault("size_hint", (None, None))
+        kwargs.setdefault("width", dp(28))
+        kwargs.setdefault("height", dp(28))
+        kwargs.setdefault("radius", dp(14))
+        super().__init__(**kwargs)
+
+        with self.canvas.after:
+            self._icon_color = Color(1, 1, 1, 1)
+            self._icon_line = Line(width=1.2, cap="round", joint="round")
+
+        self.bind(pos=self._update_icon, size=self._update_icon)
+        Clock.schedule_once(self._update_icon, 0)
+
+    def _update_icon(self, *_):
+        left = self.x + self.width * 0.34
+        mid_x = self.x + self.width * 0.47
+        right = self.x + self.width * 0.64
+        low = self.y + self.height * 0.48
+        mid_y = self.y + self.height * 0.36
+        high = self.y + self.height * 0.58
+        self._icon_line.points = [left, low, mid_x, mid_y, right, high]
+
+
 class GlassTextInput(TextInput):
     """Dark input field with rounded border."""
 
@@ -275,7 +305,7 @@ class GlassTextInput(TextInput):
         kwargs.setdefault("padding", [dp(14), dp(12), dp(14), dp(12)])
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(46))
-        kwargs.setdefault("font_size", "15sp")
+        kwargs.setdefault("font_size", FONT_SIZE)
         super().__init__(**kwargs)
 
         self.radius = radius
@@ -384,6 +414,7 @@ class GlassSpinner(Spinner):
         kwargs.setdefault("background_normal", "")
         kwargs.setdefault("background_color", (0, 0, 0, 0))
         kwargs.setdefault("color", TEXT_PRIMARY)
+        kwargs.setdefault("font_size", FONT_SIZE)
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(46))
         kwargs.setdefault("option_cls", DarkSpinnerOption)
@@ -418,7 +449,7 @@ class SectionTitle(Label):
 
     def __init__(self, **kwargs):
         kwargs.setdefault("color", TEXT_PRIMARY)
-        kwargs.setdefault("font_size", "18sp")
+        kwargs.setdefault("font_size", FONT_SIZE)
         kwargs.setdefault("bold", True)
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(34))
@@ -446,7 +477,7 @@ class BadgeLabel(Label):
         kwargs.setdefault("color", text_color)
         kwargs.setdefault("size_hint", (None, None))
         kwargs.setdefault("height", dp(28))
-        kwargs.setdefault("font_size", "12sp")
+        kwargs.setdefault("font_size", FONT_SIZE)
         kwargs.setdefault("bold", True)
         super().__init__(**kwargs)
 

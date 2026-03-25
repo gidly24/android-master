@@ -17,8 +17,11 @@ class Task:
     description: str
     category: str
     due_date: str
+    due_time: str
     recurrence: str
     priority: str
     status: str
+    is_archived: int = 0
+    archived_at: Optional[str] = None
     created_at: Optional[str] = None
     updated_at: Optional[str] = None
