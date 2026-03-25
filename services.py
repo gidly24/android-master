@@ -7,11 +7,13 @@ from models import CATEGORIES, PRIORITY_OPTIONS, RECURRENCE_OPTIONS, Task
 class TaskService:
     """Business logic for task management."""
 
+    DEMO_DATA_STATE_KEY = "demo_data_initialized"
+
     def __init__(self, database):
         self.database = database
 
     def initialize_demo_data(self):
-        if self.database.count_tasks() > 0:
+        if self._is_demo_data_initialized():
             self.update_overdue_tasks()
             return
 
@@ -19,83 +21,97 @@ class TaskService:
         demo_tasks = [
             Task(
                 id=None,
-                title="РћРїР»Р°С‚РёС‚СЊ РёРЅС‚РµСЂРЅРµС‚",
-                description="РџСЂРѕРІРµСЂРёС‚СЊ Р±Р°Р»Р°РЅСЃ Рё РѕРїР»Р°С‚РёС‚СЊ РґРѕРјР°С€РЅРёР№ РёРЅС‚РµСЂРЅРµС‚.",
-                category="РїР»Р°С‚РµР¶Рё",
+                title="Оплатить интернет",
+                description="Проверить баланс и оплатить домашний интернет.",
+                category="платежи",
                 due_date=(today + timedelta(days=2)).isoformat(),
                 due_time="18:00",
-                recurrence="РµР¶РµРјРµСЃСЏС‡РЅРѕ",
-                priority="РІС‹СЃРѕРєРёР№",
-                status="Р°РєС‚РёРІРЅР°",
+                recurrence="ежемесячно",
+                priority="высокий",
+                status="активна",
                 is_archived=0,
             ),
             Task(
                 id=None,
-                title="РџСЂРёРЅСЏС‚СЊ РІРёС‚Р°РјРёРЅС‹",
-                description="РЈС‚СЂРµРЅРЅРёР№ РїСЂРёРµРј РІРёС‚Р°РјРёРЅРѕРІ РїРѕСЃР»Рµ Р·Р°РІС‚СЂР°РєР°.",
-                category="Р»РµРєР°СЂСЃС‚РІР°",
+                title="Принять витамины",
+                description="Утренний прием витаминов после завтрака.",
+                category="лекарства",
                 due_date=today.isoformat(),
                 due_time="09:00",
-                recurrence="РµР¶РµРґРЅРµРІРЅРѕ",
-                priority="СЃСЂРµРґРЅРёР№",
-                status="Р°РєС‚РёРІРЅР°",
+                recurrence="ежедневно",
+                priority="средний",
+                status="активна",
                 is_archived=0,
             ),
             Task(
                 id=None,
-                title="РћРїР»Р°С‚РёС‚СЊ РїРѕРґРїРёСЃРєСѓ РЅР° РјСѓР·С‹РєСѓ",
-                description="РџСЂРѕРІРµСЂРёС‚СЊ СЃРїРёСЃР°РЅРёРµ Рё С‚РµРєСѓС‰РёР№ С‚Р°СЂРёС„.",
-                category="РїРѕРґРїРёСЃРєРё",
+                title="Оплатить подписку на музыку",
+                description="Проверить списание и текущий тариф.",
+                category="подписки",
                 due_date=(today - timedelta(days=1)).isoformat(),
                 due_time="12:00",
-                recurrence="РµР¶РµРјРµСЃСЏС‡РЅРѕ",
-                priority="СЃСЂРµРґРЅРёР№",
-                status="Р°РєС‚РёРІРЅР°",
+                recurrence="ежемесячно",
+                priority="средний",
+                status="активна",
                 is_archived=0,
             ),
             Task(
                 id=None,
-                title="РџРѕР»РёС‚СЊ СЂР°СЃС‚РµРЅРёСЏ",
-                description="РџРѕР»РёРІ РєРѕРјРЅР°С‚РЅС‹С… СЂР°СЃС‚РµРЅРёР№ РІ РіРѕСЃС‚РёРЅРѕР№.",
-                category="Р±С‹С‚РѕРІС‹Рµ РґРµР»Р°",
+                title="Полить растения",
+                description="Полив комнатных растений в гостиной.",
+                category="бытовые дела",
                 due_date=(today + timedelta(days=3)).isoformat(),
                 due_time="20:00",
-                recurrence="РµР¶РµРЅРµРґРµР»СЊРЅРѕ",
-                priority="РЅРёР·РєРёР№",
-                status="Р°РєС‚РёРІРЅР°",
+                recurrence="еженедельно",
+                priority="низкий",
+                status="активна",
                 is_archived=0,
             ),
             Task(
                 id=None,
-                title="РџРѕРґР°С‚СЊ Р·Р°СЏРІР»РµРЅРёРµ РЅР° РїСЂРѕРїСѓСЃРє",
-                description="Р Р°Р·РѕРІР°СЏ Р·Р°РґР°С‡Р° РґР»СЏ СѓРЅРёРІРµСЂСЃРёС‚РµС‚Р°.",
-                category="РґСЂСѓРіРѕРµ",
+                title="Подать заявление на пропуск",
+                description="Разовая задача для университета.",
+                category="другое",
                 due_date=(today + timedelta(days=5)).isoformat(),
                 due_time="16:00",
-                recurrence="РѕРґРЅРѕСЂР°Р·РѕРІР°СЏ",
-                priority="РІС‹СЃРѕРєРёР№",
-                status="Р°РєС‚РёРІРЅР°",
+                recurrence="одноразовая",
+                priority="высокий",
+                status="активна",
                 is_archived=0,
             ),
         ]
 
         for task in demo_tasks:
             self.database.create_task(task)
+        self._mark_demo_data_initialized()
         self.update_overdue_tasks()
 
-    def get_tasks(self, status_filter="РІСЃРµ", category_filter="РІСЃРµ", search_text=""):
+    def _is_demo_data_initialized(self) -> bool:
+        if self.database.get_app_state(self.DEMO_DATA_STATE_KEY) == "1":
+            return True
+
+        if not self.database.was_created:
+            self._mark_demo_data_initialized()
+            return True
+
+        return False
+
+    def _mark_demo_data_initialized(self):
+        self.database.set_app_state(self.DEMO_DATA_STATE_KEY, "1")
+
+    def get_tasks(self, status_filter="все", category_filter="все", search_text=""):
         self.update_overdue_tasks()
         tasks = self.database.get_all_tasks()
         result = []
-        normalized_status = (status_filter or "Р’СЃРµ").strip().lower()
-        normalized_category = (category_filter or "Р’СЃРµ").strip().lower()
+        normalized_status = (status_filter or "Все").strip().lower()
+        normalized_category = (category_filter or "Все").strip().lower()
 
         for task in tasks:
             if task.is_archived:
                 continue
-            if normalized_status != "РІСЃРµ" and task.status.lower() != normalized_status:
+            if normalized_status != "все" and task.status.lower() != normalized_status:
                 continue
-            if normalized_category != "РІСЃРµ" and task.category.lower() != normalized_category:
+            if normalized_category != "все" and task.category.lower() != normalized_category:
                 continue
             if search_text and search_text.lower() not in task.title.lower():
                 continue
@@ -119,7 +135,7 @@ class TaskService:
         status = self.calculate_status(
             task_data["due_date"],
             task_data["due_time"],
-            task_data.get("status", "Р°РєС‚РёРІРЅР°"),
+            task_data.get("status", "активна"),
         )
         task = Task(
             id=task_id,
@@ -149,14 +165,14 @@ class TaskService:
         if not task:
             return
 
-        if task.recurrence == "РѕРґРЅРѕСЂР°Р·РѕРІР°СЏ":
-            task.status = "РІС‹РїРѕР»РЅРµРЅР°"
+        if task.recurrence == "одноразовая":
+            task.status = "выполнена"
             task.is_archived = 1
             task.archived_at = datetime.now().isoformat(timespec="seconds")
         else:
             task.due_date = self.get_next_due_date(task.due_date, task.recurrence)
             task.due_time = task.due_time or "23:59"
-            task.status = "Р°РєС‚РёРІРЅР°"
+            task.status = "активна"
             task.is_archived = 0
             task.archived_at = None
         self.database.update_task(task)
@@ -168,11 +184,11 @@ class TaskService:
         for task in tasks:
             if task.is_archived:
                 continue
-            if task.status == "РІС‹РїРѕР»РЅРµРЅР°":
+            if task.status == "выполнена":
                 continue
 
             due_at = self.parse_due_datetime(task.due_date, task.due_time)
-            new_status = "РїСЂРѕСЃСЂРѕС‡РµРЅР°" if due_at < now else "Р°РєС‚РёРІРЅР°"
+            new_status = "просрочена" if due_at < now else "активна"
             if task.status != new_status:
                 task.status = new_status
                 self.database.update_task(task)
@@ -181,18 +197,18 @@ class TaskService:
         self.update_overdue_tasks()
         tasks = self.database.get_all_tasks()
         return {
-            "Р’СЃРµРіРѕ Р·Р°РґР°С‡": len([task for task in tasks if not task.is_archived]),
-            "РђРєС‚РёРІРЅС‹С…": len([task for task in tasks if task.status == "Р°РєС‚РёРІРЅР°" and not task.is_archived]),
-            "Р’С‹РїРѕР»РЅРµРЅРЅС‹С…": len([task for task in tasks if task.status == "РІС‹РїРѕР»РЅРµРЅР°" and task.is_archived]),
-            "РџСЂРѕСЃСЂРѕС‡РµРЅРЅС‹С…": len([task for task in tasks if task.status == "РїСЂРѕСЃСЂРѕС‡РµРЅР°" and not task.is_archived]),
+            "Всего задач": len([task for task in tasks if not task.is_archived]),
+            "Активных": len([task for task in tasks if task.status == "активна" and not task.is_archived]),
+            "Выполненных": len([task for task in tasks if task.status == "выполнена" and task.is_archived]),
+            "Просроченных": len([task for task in tasks if task.status == "просрочена" and not task.is_archived]),
         }
 
     @staticmethod
     def calculate_status(due_date_text: str, due_time_text: str, current_status: str) -> str:
-        if current_status.strip().lower() == "РІС‹РїРѕР»РЅРµРЅР°":
-            return "РІС‹РїРѕР»РЅРµРЅР°"
+        if current_status.strip().lower() == "выполнена":
+            return "выполнена"
         due_at = TaskService.parse_due_datetime(due_date_text, due_time_text)
-        return "РїСЂРѕСЃСЂРѕС‡РµРЅР°" if due_at < datetime.now() else "Р°РєС‚РёРІРЅР°"
+        return "просрочена" if due_at < datetime.now() else "активна"
 
     @staticmethod
     def parse_date(value: str) -> date:
@@ -212,11 +228,11 @@ class TaskService:
     def get_next_due_date(current_due_date: str, recurrence: str) -> str:
         base_date = max(TaskService.parse_date(current_due_date), date.today())
 
-        if recurrence == "РµР¶РµРґРЅРµРІРЅРѕ":
+        if recurrence == "ежедневно":
             next_date = base_date + timedelta(days=1)
-        elif recurrence == "РµР¶РµРЅРµРґРµР»СЊРЅРѕ":
+        elif recurrence == "еженедельно":
             next_date = base_date + timedelta(days=7)
-        elif recurrence == "РµР¶РµРјРµСЃСЏС‡РЅРѕ":
+        elif recurrence == "ежемесячно":
             year = base_date.year
             month = base_date.month + 1
             if month > 12:
@@ -230,12 +246,12 @@ class TaskService:
 
     @staticmethod
     def get_countdown_text(task: Task) -> str:
-        if task.status == "РІС‹РїРѕР»РЅРµРЅР°":
-            return "Р—Р°РґР°С‡Р° Р·Р°РІРµСЂС€РµРЅР°"
+        if task.status == "выполнена":
+            return "Задача завершена"
 
         delta = TaskService.parse_due_datetime(task.due_date, task.due_time) - datetime.now()
         total_seconds = int(delta.total_seconds())
-        prefix = "РћСЃС‚Р°Р»РѕСЃСЊ" if total_seconds >= 0 else "РџСЂРѕСЃСЂРѕС‡РµРЅР° РЅР°"
+        prefix = "Осталось" if total_seconds >= 0 else "Просрочена на"
         total_seconds = abs(total_seconds)
 
         days, remainder = divmod(total_seconds, 86400)
@@ -244,21 +260,21 @@ class TaskService:
 
         parts = []
         if days:
-            parts.append(f"{days}Рґ")
+            parts.append(f"{days}д")
         if hours or days:
-            parts.append(f"{hours}С‡")
-        parts.append(f"{minutes}Рј")
+            parts.append(f"{hours}ч")
+        parts.append(f"{minutes}м")
         return f"{prefix}: {' '.join(parts[:3])}"
 
     @staticmethod
     def _validate_task_data(task_data: dict):
         if not task_data["title"].strip():
-            raise ValueError("Р’РІРµРґРёС‚Рµ РЅР°Р·РІР°РЅРёРµ Р·Р°РґР°С‡Рё.")
+            raise ValueError("Введите название задачи.")
         if task_data["category"].strip().lower() not in CATEGORIES:
-            raise ValueError("Р’С‹Р±РµСЂРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅСѓСЋ РєР°С‚РµРіРѕСЂРёСЋ.")
+            raise ValueError("Выберите корректную категорию.")
         if task_data["recurrence"].strip().lower() not in RECURRENCE_OPTIONS:
-            raise ValueError("Р’С‹Р±РµСЂРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅСѓСЋ РїРµСЂРёРѕРґРёС‡РЅРѕСЃС‚СЊ.")
+            raise ValueError("Выберите корректную периодичность.")
         if task_data["priority"].strip().lower() not in PRIORITY_OPTIONS:
-            raise ValueError("Р’С‹Р±РµСЂРёС‚Рµ РєРѕСЂСЂРµРєС‚РЅС‹Р№ РїСЂРёРѕСЂРёС‚РµС‚.")
+            raise ValueError("Выберите корректный приоритет.")
         TaskService.parse_date(task_data["due_date"])
         TaskService.parse_time(task_data["due_time"])

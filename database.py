@@ -8,15 +8,16 @@ class DatabaseManager:
     """SQLite wrapper with basic CRUD operations."""
 
     def __init__(self, db_path: Path):
+        self.was_created = not db_path.exists()
         self.db_path = str(db_path)
-        self._create_table()
+        self._create_schema()
 
     def _connect(self):
         connection = sqlite3.connect(self.db_path)
         connection.row_factory = sqlite3.Row
         return connection
 
-    def _create_table(self):
+    def _create_schema(self):
         with self._connect() as connection:
             connection.execute(
                 """
@@ -37,6 +38,14 @@ class DatabaseManager:
                 )
                 """
             )
+            connection.execute(
+                """
+                CREATE TABLE IF NOT EXISTS app_state (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL
+                )
+                """
+            )
             columns = {
                 row["name"]
                 for row in connection.execute("PRAGMA table_info(tasks)").fetchall()
@@ -53,6 +62,25 @@ class DatabaseManager:
                 connection.execute(
                     "ALTER TABLE tasks ADD COLUMN archived_at TEXT"
                 )
+
+    def get_app_state(self, key: str):
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT value FROM app_state WHERE key = ?",
+                (key,),
+            ).fetchone()
+        return row["value"] if row else None
+
+    def set_app_state(self, key: str, value: str):
+        with self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO app_state (key, value)
+                VALUES (?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value
+                """,
+                (key, value),
+            )
 
     def create_task(self, task: Task) -> int:
         with self._connect() as connection:
