@@ -134,6 +134,10 @@ class DatabaseManager:
         with self._connect() as connection:
             connection.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
 
+    def clear_archived_tasks(self):
+        with self._connect() as connection:
+            connection.execute("DELETE FROM tasks WHERE is_archived = 1")
+
     def get_task(self, task_id: int):
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
@@ -142,7 +146,16 @@ class DatabaseManager:
     def get_all_tasks(self):
         with self._connect() as connection:
             rows = connection.execute(
-                "SELECT * FROM tasks ORDER BY due_date ASC, due_time ASC, priority DESC, id DESC"
+                """
+                SELECT * FROM tasks
+                ORDER BY
+                    CASE WHEN due_date = '' THEN 1 ELSE 0 END,
+                    due_date ASC,
+                    CASE WHEN due_time = '' THEN 1 ELSE 0 END,
+                    due_time ASC,
+                    priority DESC,
+                    id DESC
+                """
             ).fetchall()
         return [self._row_to_task(row) for row in rows]
 
@@ -170,7 +183,7 @@ class DatabaseManager:
             description=row["description"] or "",
             category=row["category"],
             due_date=row["due_date"],
-            due_time=row["due_time"] or "23:59",
+            due_time=row["due_time"] or "",
             recurrence=row["recurrence"],
             priority=row["priority"],
             status=row["status"],

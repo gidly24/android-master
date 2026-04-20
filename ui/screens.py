@@ -59,7 +59,13 @@ class TaskRow(GlassPane):
         self._tap_candidate = False
         self._swipe_triggered = False
         self._countdown_event = Clock.schedule_interval(self._refresh_countdown_text, 30)
+        self._complete_event = None
+        self._is_completing = False
         self.countdown_label = None
+        self.compact_complete_button = None
+        self.expanded_complete_button = None
+        self.edit_button = None
+        self.delete_button = None
         self.bind(minimum_height=self.setter("height"))
         self._build_ui()
         self._refresh_countdown_text()
@@ -68,8 +74,16 @@ class TaskRow(GlassPane):
         self.clear_widgets()
         self.spacing = dp(8) if not self.expanded else dp(10)
         self.padding = (dp(14), dp(10), dp(14), dp(10)) if not self.expanded else dp(14)
+        self.compact_complete_button = None
+        self.expanded_complete_button = None
+        self.edit_button = None
+        self.delete_button = None
 
         header = BoxLayout(size_hint_y=None, spacing=dp(8))
+        header.bind(minimum_height=header.setter("height"))
+
+        title_box = BoxLayout(orientation="vertical", size_hint_y=None, spacing=dp(2))
+        title_box.bind(minimum_height=title_box.setter("height"))
         title = Label(
             text=self.task.title,
             color=(1, 1, 1, 1),
@@ -77,30 +91,36 @@ class TaskRow(GlassPane):
             bold=True,
             size_hint_y=None,
             halign="left",
-            valign="middle",
+            valign="top",
         )
         bind_text_size(title)
-        bind_auto_height(title, min_height=dp(24))
-        header.add_widget(title)
+        bind_auto_height(title, min_height=dp(24), extra=dp(4))
+        title_box.add_widget(title)
 
         expand_hint = Label(
             text="Скрыть" if self.expanded else "Подробнее",
             color=(1, 1, 1, 0.8),
             font_size=FONT_SIZE,
-            size_hint=(None, None),
-            width=dp(78),
-            halign="right",
+            size_hint_y=None,
+            halign="left",
             valign="middle",
         )
-        expand_hint.text_size = (expand_hint.width, None)
+        bind_text_size(expand_hint)
         bind_auto_height(expand_hint, min_height=dp(24), extra=0)
-        header.add_widget(expand_hint)
-        header.height = max(title.height, expand_hint.height)
-        header.bind(minimum_height=header.setter("height"))
+        title_box.add_widget(expand_hint)
+        header.add_widget(title_box)
+
+        self.compact_complete_button = None
+        if self.task.status != "выполнена":
+            compact_complete = CheckIconButton()
+            compact_complete.bind(on_release=lambda *_: self._begin_complete())
+            self.compact_complete_button = compact_complete
+            header.add_widget(compact_complete)
+
         self.add_widget(header)
 
-        badges = BoxLayout(size_hint_y=None, height=dp(28), spacing=dp(6))
-        badges.add_widget(
+        meta_row = BoxLayout(size_hint_y=None, height=dp(28), spacing=dp(6))
+        meta_row.add_widget(
             BadgeLabel(
                 text=self.task.category.capitalize(),
                 fill_color=(1, 1, 1, 0.2),
@@ -108,7 +128,6 @@ class TaskRow(GlassPane):
                 text_color=(1, 1, 1, 1),
             )
         )
-        badges.add_widget(self._build_status_badge(self.task.status))
         self.countdown_label = BadgeLabel(
             text="",
             fill_color=(1, 1, 1, 0.94),
@@ -117,31 +136,11 @@ class TaskRow(GlassPane):
             font_size=FONT_SIZE,
         )
         self._refresh_countdown_text()
-        badges.add_widget(self.countdown_label)
-        badges.add_widget(Widget())
-        if self.task.status != "выполнена":
-            compact_complete = CheckIconButton()
-            compact_complete.bind(on_release=lambda *_: self.on_complete(self.task.id))
-            badges.add_widget(compact_complete)
-        self.add_widget(badges)
+        meta_row.add_widget(self.countdown_label)
+        meta_row.add_widget(Widget())
+        self.add_widget(meta_row)
 
         if self.expanded:
-            detail_lines = [f"Срок: {self.task.due_date} {self.task.due_time}"]
-            detail_lines.append(f"Периодичность: {self.task.recurrence.capitalize()}")
-            detail_lines.append(f"Приоритет: {self.task.priority.capitalize()}")
-
-            details = Label(
-                text="\n".join(detail_lines),
-                color=(1, 1, 1, 0.96),
-                size_hint_y=None,
-                halign="left",
-                valign="top",
-                font_size=FONT_SIZE,
-            )
-            bind_text_size(details)
-            bind_auto_height(details, min_height=dp(62))
-            self.add_widget(details)
-
             description = self.task.description or "Описание не указано."
             description_label = Label(
                 text=f"Описание: {description}",
@@ -157,17 +156,23 @@ class TaskRow(GlassPane):
 
             buttons = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
             edit_button = GlassButton(text="Изменить", height=dp(40))
-            complete_button = SuccessGlassButton(text="Выполнено", height=dp(40))
             delete_button = DangerGlassButton(text="Удалить", height=dp(40))
+            self.edit_button = edit_button
+            self.delete_button = delete_button
 
             edit_button.bind(on_release=lambda *_: self.on_edit(self.task.id))
-            complete_button.bind(on_release=lambda *_: self.on_complete(self.task.id))
             delete_button.bind(on_release=lambda *_: self.on_delete(self.task.id))
 
             buttons.add_widget(edit_button)
-            buttons.add_widget(complete_button)
+            if self.task.status != "выполнена":
+                complete_button = SuccessGlassButton(text="Выполнено", height=dp(40))
+                complete_button.bind(on_release=lambda *_: self._begin_complete())
+                self.expanded_complete_button = complete_button
+                buttons.add_widget(complete_button)
             buttons.add_widget(delete_button)
             self.add_widget(buttons)
+
+        self._sync_complete_ui()
 
     @staticmethod
     def _status_palette(status):
@@ -178,20 +183,11 @@ class TaskRow(GlassPane):
         }
         return mapping.get(status, (CARD_ACTIVE_FILL, CARD_ACTIVE_BORDER))
 
-    @staticmethod
-    def _build_status_badge(status):
-        return BadgeLabel(
-            text=status.capitalize(),
-            fill_color=(1, 1, 1, 0.2),
-            border_color=(1, 1, 1, 0.28),
-            text_color=(1, 1, 1, 1),
-        )
-
     def _refresh_countdown_text(self, *_):
         if self.countdown_label is not None:
             self.countdown_label.text = self._build_countdown_text()
             self.countdown_label.text_color = self._countdown_text_color()
-            self.countdown_label.color = self.countdown_label.text_color
+            self.countdown_label.color = self._countdown_text_color()
 
     def _format_countdown(self):
         return TaskService.get_countdown_text(self.task).replace("Осталось: ", "").replace(
@@ -209,6 +205,34 @@ class TaskRow(GlassPane):
         if self.task.status == "выполнена":
             return CARD_DONE_BORDER
         return TEXT_PRIMARY
+
+    def _begin_complete(self):
+        if self._is_completing:
+            return
+        self._is_completing = True
+        self._sync_complete_ui()
+        self._complete_event = Clock.schedule_once(lambda *_: self._finish_complete(), 1.0)
+
+    def _finish_complete(self):
+        self._complete_event = None
+        self.on_complete(self.task.id)
+
+    def _sync_complete_ui(self):
+        if self.compact_complete_button is not None:
+            self.compact_complete_button.disabled = self._is_completing
+            self.compact_complete_button.set_selected(self._is_completing)
+        if self.expanded_complete_button is not None:
+            self.expanded_complete_button.disabled = self._is_completing
+            self.expanded_complete_button.text = "Выполняется..." if self._is_completing else "Выполнено"
+
+    def _is_action_touch(self, touch):
+        widgets = [
+            self.compact_complete_button,
+            self.expanded_complete_button,
+            self.edit_button,
+            self.delete_button,
+        ]
+        return any(widget is not None and widget.collide_point(*touch.pos) for widget in widgets)
 
     def on_touch_up(self, touch):
         handled = super().on_touch_up(touch)
@@ -229,6 +253,11 @@ class TaskRow(GlassPane):
 
     def on_touch_down(self, touch):
         if self.collide_point(*touch.pos):
+            if self._is_completing:
+                return True
+            if self._is_action_touch(touch):
+                self._tap_candidate = False
+                return super().on_touch_down(touch)
             self._tap_candidate = True
             self._swipe_triggered = False
         return super().on_touch_down(touch)
@@ -240,7 +269,8 @@ class TaskRow(GlassPane):
         delta_x = touch.x - touch.ox
         delta_y = touch.y - touch.oy
         if (
-            not self._swipe_triggered
+            not self._is_completing
+            and not self._swipe_triggered
             and self.collide_point(*touch.pos)
             and delta_x < -dp(72)
             and abs(delta_x) > abs(delta_y) * 1.2
@@ -254,6 +284,9 @@ class TaskRow(GlassPane):
         if self.parent is None and self._countdown_event is not None:
             self._countdown_event.cancel()
             self._countdown_event = None
+        if self.parent is None and self._complete_event is not None:
+            self._complete_event.cancel()
+            self._complete_event = None
 
 
 class TaskListScreen(Screen):
@@ -623,10 +656,11 @@ class StatsScreen(Screen):
 class ArchiveScreen(Screen):
     """Screen with archived completed tasks."""
 
-    def __init__(self, service, on_delete, **kwargs):
+    def __init__(self, service, on_delete, on_clear_all=None, **kwargs):
         super().__init__(**kwargs)
         self.service = service
         self.on_delete = on_delete
+        self.on_clear_all = on_clear_all
         self._build_ui()
         self.refresh_archive()
 
@@ -647,9 +681,15 @@ class ArchiveScreen(Screen):
         )
         container.add_widget(self.search_input)
 
+        actions_row = BoxLayout(size_hint_y=None, height=dp(42), spacing=dp(8))
         search_button = PrimaryGlassButton(text="Обновить", height=dp(42))
         search_button.bind(on_release=lambda *_: self.refresh_archive())
-        container.add_widget(search_button)
+        actions_row.add_widget(search_button)
+
+        clear_button = DangerGlassButton(text="Очистить все", height=dp(42))
+        clear_button.bind(on_release=lambda *_: self._clear_all_archive())
+        actions_row.add_widget(clear_button)
+        container.add_widget(actions_row)
 
         self.scroll_view = ScrollView(bar_width=dp(4), scroll_type=["bars", "content"])
         self.archive_container = BoxLayout(
@@ -726,3 +766,10 @@ class ArchiveScreen(Screen):
             self.archive_container.add_widget(card)
 
         self.archive_container.add_widget(Widget(size_hint_y=None, height=dp(8)))
+
+    def _clear_all_archive(self):
+        if self.on_clear_all is not None:
+            self.on_clear_all()
+        else:
+            self.service.clear_archived_tasks()
+            self.refresh_archive()

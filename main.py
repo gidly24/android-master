@@ -25,9 +25,11 @@ from kivy.metrics import dp
 from kivy.uix.screenmanager import NoTransition, ScreenManager
 from kivy.utils import platform
 
+from ai_agent import TaskAIAgent
 from database import DatabaseManager
 from services import TaskService
 from ui.components import GlassButton, GlassPane, GlassRoot, PrimaryGlassButton
+from ui.chat_screen import ChatScreen
 from ui.screens import ArchiveScreen, StatsScreen, TaskListScreen
 
 
@@ -43,6 +45,7 @@ class TaskControlApp(App):
         database_path = Path(__file__).resolve().parent / "tasks.db"
         self.database = DatabaseManager(database_path)
         self.service = TaskService(self.database)
+        self.ai_agent = TaskAIAgent(self.service)
         self.service.initialize_demo_data()
 
         root = GlassRoot(orientation="vertical", spacing=dp(10), padding=dp(12))
@@ -74,10 +77,19 @@ class TaskControlApp(App):
         stats_button = GlassButton(text="Статистика")
         stats_button.bind(on_release=lambda *_: self.switch_screen("stats"))
 
-        self.nav_buttons = {"tasks": tasks_button, "archive": archive_button, "stats": stats_button}
+        chat_button = GlassButton(text="ИИ-чат")
+        chat_button.bind(on_release=lambda *_: self.switch_screen("chat"))
+
+        self.nav_buttons = {
+            "tasks": tasks_button,
+            "archive": archive_button,
+            "stats": stats_button,
+            "chat": chat_button,
+        }
         navigation.add_widget(tasks_button)
         navigation.add_widget(archive_button)
         navigation.add_widget(stats_button)
+        navigation.add_widget(chat_button)
         return navigation
 
     def _build_screens(self):
@@ -91,17 +103,28 @@ class TaskControlApp(App):
             name="archive",
             service=self.service,
             on_delete=self.task_list_screen.confirm_delete,
+            on_clear_all=self.clear_archive,
         )
         self.stats_screen = StatsScreen(name="stats", service=self.service)
+        self.chat_screen = ChatScreen(
+            name="chat",
+            agent=self.ai_agent,
+            on_tasks_changed=self.refresh_all_screens,
+        )
         self.screen_manager.add_widget(self.task_list_screen)
         self.screen_manager.add_widget(self.archive_screen)
         self.screen_manager.add_widget(self.stats_screen)
+        self.screen_manager.add_widget(self.chat_screen)
         return self.screen_manager
 
     def refresh_all_screens(self):
         self.task_list_screen.refresh_tasks()
         self.archive_screen.refresh_archive()
         self.stats_screen.refresh_stats()
+
+    def clear_archive(self):
+        self.service.clear_archived_tasks()
+        self.refresh_all_screens()
 
     def switch_screen(self, screen_name):
         self.screen_manager.current = screen_name
