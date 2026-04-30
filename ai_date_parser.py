@@ -74,6 +74,25 @@ def extract_time(text: str) -> Optional[time]:
     if match:
         return time(hour=int(match.group(1)), minute=int(match.group(2)))
 
+    part_of_day_match = re.search(
+        r"\b(?:в\s+)?([1-9]|1[0-2])\s*(?:час(?:а|ов)?\s*)?(утра|вечера|дня|ночи)\b",
+        text,
+    )
+    if part_of_day_match:
+        hour = int(part_of_day_match.group(1))
+        period = part_of_day_match.group(2)
+        if period == "утра":
+            hour = 0 if hour == 12 else hour
+        elif period in {"дня", "вечера"}:
+            if hour != 12:
+                hour += 12
+        elif period == "ночи":
+            if hour == 12:
+                hour = 0
+            elif hour >= 6:
+                hour += 12
+        return time(hour=hour, minute=0)
+
     hour_only_match = re.search(r"\b([01]?\d|2[0-3])\s*(?:час(?:а|ов)?|ч)\b", text)
     if hour_only_match:
         return time(hour=int(hour_only_match.group(1)), minute=0)
@@ -202,7 +221,13 @@ def build_relative_date_hints(text: str, now: datetime) -> str:
         f"Следующая неделя: {_start_of_week(now.date() + timedelta(days=7)).isoformat()} .. {_end_of_week(now.date() + timedelta(days=7)).isoformat()}",
     ]
     if parsed.due_at is not None:
-        hints.append(f"Для этой фразы локально распознана дата/время-подсказка: {parsed.due_at.strftime('%Y-%m-%d %H:%M')}")
+        hints.append(
+            "Для этой фразы локально распознана дата/время-подсказка: "
+            + parsed.due_at.strftime("%Y-%m-%d %H:%M")
+        )
     elif parsed.start_date is not None and parsed.end_date is not None:
-        hints.append(f"Для этой фразы локально распознан период-подсказка: {parsed.start_date.isoformat()} .. {parsed.end_date.isoformat()}")
+        hints.append(
+            "Для этой фразы локально распознан период-подсказка: "
+            + f"{parsed.start_date.isoformat()} .. {parsed.end_date.isoformat()}"
+        )
     return "\n".join(hints)

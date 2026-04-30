@@ -3,7 +3,7 @@ import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import Any, Optional
 
 from ai_config import AISettings
@@ -59,12 +59,14 @@ class OpenAIClient(BaseLLMClient):
     def complete(self, system_prompt: str, user_prompt: str) -> str:
         payload = {
             "model": self.settings.model,
-            "temperature": 0.1,
+            "temperature": 0,
             "messages": [
                 {"role": "system", "content": system_prompt},
                 {"role": "user", "content": user_prompt},
             ],
         }
+        if self.settings.provider == "openai":
+            payload["response_format"] = {"type": "json_object"}
         request = urllib.request.Request(
             url=f"{self.settings.base_url}/chat/completions",
             data=json.dumps(payload).encode("utf-8"),
@@ -352,6 +354,8 @@ class TaskAIAgent:
 - Для list_tasks можешь передавать category, status, title_query, start_date, end_date.
 - Для delete_task и mark_as_done передавай title_query и, если есть, task_id.
 - Если пользователь пишет о будущем событии как о личном плане или намерении, это можно трактовать как create_task/напоминание, если фраза похожа на то, что человек хочет не забыть.
+- Если в запросе на создание есть время, но нет явной даты, по умолчанию считай это задачей на завтра.
+- Для фразы вроде "добавь задачу встать в 8 утра на работу" нормализуй название задачи до "Встать на работу", а дату поставь на завтра в 08:00.
 - Если сомневаешься, лучше верни clarify, чем выдумывай данные.
 """
 
@@ -366,17 +370,21 @@ class TaskAIAgent:
         if message.strip().lower() == "/back_to_menu":
             self.pending_resolution = None
             self.wizard_state = None
-            return self.dispatcher.dispatch(AgentCommand(action="back_to_menu"))
+            return self._sanitize_assistant_reply(self.dispatcher.dispatch(AgentCommand(action="back_to_menu")))
 
         wizard_reply = self._handle_active_wizard(message)
         if wizard_reply is not None:
-            return wizard_reply
+            return self._sanitize_assistant_reply(wizard_reply)
 
         pending_reply = self._try_resolve_pending(message)
         if pending_reply is not None:
-            return pending_reply
+            return self._sanitize_assistant_reply(pending_reply)
         command = self.analyze_message(message, history=history or [])
         if command.action == "create_task":
+            if command.data.get("title") and command.data.get("due_date"):
+                reply = self.dispatcher.dispatch(command)
+                self._remember_pending_resolution(reply)
+                return self._sanitize_assistant_reply(reply)
             return self._start_create_wizard(command.data)
         if command.action == "update_task" and not self._has_update_changes(command.data):
             return self._begin_update_flow(command.data)
@@ -384,7 +392,7 @@ class TaskAIAgent:
             return self._start_create_wizard(command.data.get("payload", {}), start_step=command.data.get("missing_field", "title"))
         reply = self.dispatcher.dispatch(command)
         self._remember_pending_resolution(reply)
-        return reply
+        return self._sanitize_assistant_reply(reply)
 
     def analyze_message(self, message: str, history: Optional[list[dict[str, str]]] = None) -> AgentCommand:
         text = (message or "").strip()
@@ -455,7 +463,7 @@ class TaskAIAgent:
             if not data.get("task_id") and not data.get("title_query"):
                 return AgentCommand("clarify", {"missing_field": "title"}, answer or "Какую задачу изменить?")
 
-        return AgentCommand(action=action, data=data, answer=answer)
+        return self._sanitize_agent_command(AgentCommand(action=action, data=data, answer=answer))
 
     @staticmethod
     def _sanitize_create_data(data: dict[str, Any]) -> dict[str, Any]:
@@ -505,65 +513,114 @@ class TaskAIAgent:
     def _heuristic_command(self, message: str) -> AgentCommand:
         text = message.strip()
         lowered = text.lower()
-
-        if "сколько" in lowered and "просроч" in lowered:
-            return AgentCommand("get_statistics", {}, "Сейчас посчитаю просроченные дела.")
-
-        if any(word in lowered for word in ("покажи", "список", "какие", "выведи")):
-            filters: dict[str, Any] = {}
-            category = self._infer_category(lowered)
-            if category != "другое" or "другое" in lowered:
-                filters["category"] = category
-            date_context = parse_relative_datetime(lowered, datetime.now())
-            if date_context.start_date:
-                filters["start_date"] = date_context.start_date.isoformat()
-            if date_context.end_date:
-                filters["end_date"] = date_context.end_date.isoformat()
-            if "просроч" in lowered:
-                filters["status"] = "просрочена"
-            if "все" in lowered and "актуаль" not in lowered:
-                filters["view"] = "actual"
-            return AgentCommand("list_tasks", filters, "Сейчас покажу подходящие задачи.")
-
-        if any(word in lowered for word in ("отметь", "заверши", "выполнил", "выполненной", "выполненным", "выполнить")):
-            title_query = self._extract_title_query_for_action(text)
-            if not title_query:
-                return AgentCommand("mark_as_done", {"title_query": ""}, "Сейчас помогу отметить задачу.")
-            return AgentCommand("mark_as_done", {"title_query": title_query}, "Отмечаю задачу как выполненную.")
-
-        if any(word in lowered for word in ("удали", "удалить", "сотри")):
-            title_query = self._extract_title_query_for_action(text)
-            if not title_query:
-                return AgentCommand("delete_task", {"title_query": ""}, "Сейчас помогу удалить задачу.")
-            return AgentCommand("delete_task", {"title_query": title_query}, "Сейчас удалю задачу.")
-
-        if any(word in lowered for word in ("измени", "поменяй", "обнови", "перенеси", "исправь", "редактируй")):
-            return self._heuristic_update_command(text, lowered)
-
-        explicit_create = any(
-            word in lowered
-            for word in ("добавь", "добавить", "запиши", "записать", "создай", "создать", "поставь", "поставить")
-        )
-        if explicit_create or self._looks_like_implicit_task(lowered):
+        direct_create = self._try_direct_create_command(text, lowered)
+        if direct_create is not None:
+            return direct_create
+        create_markers = ("добавь", "добавить", "запиши", "создай", "создать")
+        if any(marker in lowered for marker in create_markers):
             parsed = parse_relative_datetime(lowered, datetime.now())
-            if (
-                not explicit_create
-                and parsed.due_at is None
-                and not any(word in lowered for word in ("каждый", "ежедневно", "еженедельно", "ежемесячно"))
-            ):
-                return AgentCommand("clarify", {"missing_field": "due_date"}, "Не до конца понял дату, уточни пожалуйста.")
-
+            explicit_time = extract_time(lowered)
+            if parsed.due_at is None and explicit_time is not None:
+                tomorrow = datetime.now() + timedelta(days=1)
+                parsed = parsed.__class__(
+                    due_at=datetime.combine(tomorrow.date(), explicit_time),
+                    start_date=tomorrow.date(),
+                    end_date=tomorrow.date(),
+                    has_explicit_time=True,
+                )
             category = self._infer_category(lowered)
             title = self._infer_title(text, category)
             recurrence = self._infer_recurrence(lowered)
             priority = 3 if category == "платежи" else 2
             description = self._infer_description(text)
             due_at = parsed.due_at
+            due_date = due_at.strftime("%Y-%m-%d %H:%M") if due_at else ""
+            if title.lower() in {"задача", "новая задача", "добавь задачу"}:
+                return AgentCommand("clarify", {"missing_field": "title"}, "Как назвать задачу?")
+            payload = {
+                "title": title,
+                "description": description,
+                "category": category,
+                "due_date": due_date,
+                "recurrence": recurrence,
+                "priority": priority,
+            }
+            if due_date:
+                return AgentCommand("create_task", payload, f"Понял задачу «{title}».")
+            return AgentCommand(
+                "clarify",
+                {"missing_field": "due_date_choice", "pending_action": "create_task", "payload": payload},
+                f"Понял задачу «{title}». Поставить дату и время или оставить без даты?",
+            )
+
+
+        if "???????" in lowered and "???????" in lowered:
+            return AgentCommand("get_statistics", {}, "?????? ???????? ???????????? ????.")
+
+        if any(word in lowered for word in ("??????", "??????", "?????", "??????")):
+            filters: dict[str, Any] = {}
+            category = self._infer_category(lowered)
+            if category != "??????" or "??????" in lowered:
+                filters["category"] = category
+            date_context = parse_relative_datetime(lowered, datetime.now())
+            if date_context.start_date:
+                filters["start_date"] = date_context.start_date.isoformat()
+            if date_context.end_date:
+                filters["end_date"] = date_context.end_date.isoformat()
+            if "???????" in lowered:
+                filters["status"] = "??????????"
+            if "???" in lowered and "???????" not in lowered:
+                filters["view"] = "actual"
+            return AgentCommand("list_tasks", filters, "?????? ?????? ?????????? ??????.")
+
+        if any(word in lowered for word in ("??????", "???????", "????????", "???????????", "???????????", "?????????")):
+            title_query = self._extract_title_query_for_action(text)
+            if not title_query:
+                return AgentCommand("mark_as_done", {"title_query": ""}, "?????? ?????? ???????? ??????.")
+            return AgentCommand("mark_as_done", {"title_query": title_query}, "??????? ?????? ??? ???????????.")
+
+        if any(word in lowered for word in ("?????", "???????", "?????")):
+            title_query = self._extract_title_query_for_action(text)
+            if not title_query:
+                return AgentCommand("delete_task", {"title_query": ""}, "?????? ?????? ??????? ??????.")
+            return AgentCommand("delete_task", {"title_query": title_query}, "?????? ????? ??????.")
+
+        if any(word in lowered for word in ("??????", "???????", "??????", "????????", "???????", "??????????")):
+            return self._heuristic_update_command(text, lowered)
+
+        explicit_create = any(
+            word in lowered
+            for word in ("??????", "????????", "??????", "????????", "??????", "???????", "???????", "?????????")
+        )
+        if explicit_create or self._looks_like_implicit_task(lowered):
+            parsed = parse_relative_datetime(lowered, datetime.now())
+            explicit_time = extract_time(lowered)
+            if parsed.due_at is None and explicit_time is not None:
+                tomorrow = datetime.now() + timedelta(days=1)
+                parsed = parsed.__class__(
+                    due_at=datetime.combine(tomorrow.date(), explicit_time),
+                    start_date=tomorrow.date(),
+                    end_date=tomorrow.date(),
+                    has_explicit_time=True,
+                )
+            if (
+                not explicit_create
+                and parsed.due_at is None
+                and not any(word in lowered for word in ("??????", "?????????", "???????????", "??????????"))
+            ):
+                return AgentCommand("clarify", {"missing_field": "due_date"}, "?? ?? ????? ????? ????, ?????? ??????????.")
+
+            category = self._infer_category(lowered)
+            title = self._infer_title(text, category)
+            recurrence = self._infer_recurrence(lowered)
+            priority = 3 if category == "???????" else 2
+            description = self._infer_description(text)
+            due_at = parsed.due_at
             if recurrence and due_at is None:
                 due_at = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0)
             due_date = due_at.strftime("%Y-%m-%d %H:%M") if due_at else ""
 
-            if title.lower() in {"задача", "новая задача", "добавь задачу"}:
+            if title.lower() in {"??????", "????? ??????", "?????? ??????"}:
                 return AgentCommand(
                     "clarify",
                     {
@@ -577,7 +634,7 @@ class TaskAIAgent:
                             "priority": priority,
                         },
                     },
-                    "Как назвать задачу?",
+                    "??? ??????? ???????",
                 )
 
             payload = {
@@ -589,24 +646,10 @@ class TaskAIAgent:
                 "priority": priority,
             }
             if due_date:
-                if parsed.has_explicit_time:
-                    return AgentCommand(
-                        "clarify",
-                        {
-                            "missing_field": "priority",
-                            "pending_action": "create_task",
-                            "payload": payload,
-                        },
-                        f"Понял задачу «{title}». Осталось выбрать приоритет.",
-                    )
                 return AgentCommand(
-                    "clarify",
-                    {
-                        "missing_field": "time_choice",
-                        "pending_action": "create_task",
-                        "payload": payload,
-                    },
-                    f"Для задачи «{title}» дата есть. Добавить точное время или оставить без времени?",
+                    "create_task",
+                    payload,
+                    f"????? ?????? ?{title}?.",
                 )
             return AgentCommand(
                 "clarify",
@@ -615,10 +658,146 @@ class TaskAIAgent:
                     "pending_action": "create_task",
                     "payload": payload,
                 },
-                f"Понял задачу «{title}». Поставить дату и время или оставить без даты?",
+                f"????? ?????? ?{title}?. ????????? ???? ? ????? ??? ???????? ??? ?????",
             )
 
-        return AgentCommand("clarify", {"missing_field": "intent"}, "Не до конца понял запрос. Напиши, что нужно сделать.")
+        return self._sanitize_agent_command(
+            AgentCommand("clarify", {"missing_field": "intent"}, "Не до конца понял запрос. Напиши проще или выбери кнопку ниже.")
+        )
+
+    def _try_direct_create_command(self, text: str, lowered: str) -> Optional[AgentCommand]:
+        create_markers = ("добавь", "добавить", "запиши", "записать", "создай", "создать", "поставь", "поставить")
+        future_markers = (
+            "завтра",
+            "послезавтра",
+            "сегодня",
+            "через ",
+            "в понедельник",
+            "во вторник",
+            "в среду",
+            "в четверг",
+            "в пятницу",
+            "в субботу",
+            "в воскресенье",
+        )
+        intent_markers = (
+            "нужно",
+            "надо",
+            "буду",
+            "пойду",
+            "поеду",
+            "встреча",
+            "к врачу",
+            "не забыть",
+            "напомни",
+            "записаться",
+            "сходить",
+        )
+
+        explicit_create = any(marker in lowered for marker in create_markers)
+        implicit_create = any(marker in lowered for marker in future_markers) and any(
+            marker in lowered for marker in intent_markers
+        )
+        if not explicit_create and not implicit_create:
+            return None
+
+        parsed = parse_relative_datetime(lowered, datetime.now())
+        explicit_time = extract_time(lowered)
+        if parsed.due_at is None and explicit_time is not None:
+            tomorrow = datetime.now() + timedelta(days=1)
+            parsed = parsed.__class__(
+                due_at=datetime.combine(tomorrow.date(), explicit_time),
+                start_date=tomorrow.date(),
+                end_date=tomorrow.date(),
+                has_explicit_time=True,
+            )
+
+        if not explicit_create and parsed.due_at is None:
+            return AgentCommand("clarify", {"missing_field": "due_date"}, "Не до конца понял дату, уточни пожалуйста.")
+
+        category = self._infer_category(lowered)
+        title = self._infer_title(text, category)
+        recurrence = self._infer_recurrence(lowered)
+        priority = self._infer_priority(lowered, category)
+        description = self._infer_description(text)
+        due_at = parsed.due_at
+        if recurrence and due_at is None:
+            due_at = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0)
+        due_date = ""
+        if due_at is not None:
+            if parsed.has_explicit_time:
+                due_date = due_at.strftime("%Y-%m-%d %H:%M")
+            else:
+                due_date = due_at.strftime("%Y-%m-%d")
+
+        if title.lower() in {"задача", "новая задача", "добавь задачу"}:
+            return AgentCommand("clarify", {"missing_field": "title"}, "Как назвать задачу?")
+
+        payload = {
+            "title": title,
+            "description": description,
+            "category": category,
+            "due_date": due_date,
+            "recurrence": recurrence,
+            "priority": priority,
+        }
+        if due_date:
+            return AgentCommand("create_task", payload, f"Понял задачу «{title}».")
+        return AgentCommand(
+            "clarify",
+            {"missing_field": "due_date_choice", "pending_action": "create_task", "payload": payload},
+            f"Понял задачу «{title}». Поставить дату и время или оставить без даты?",
+        )
+
+    @staticmethod
+    def _infer_priority(text: str, category: str) -> int:
+        if any(word in text for word in ("низкий приоритет", "не срочно", "неважно", "когда-нибудь", "как будет время")):
+            return 1
+        if any(word in text for word in ("срочно", "критично", "очень важно", "важно", "приоритет высокий", "высокий приоритет")):
+            return 3
+        if re.search(r"\bвысок(?:ий|им|ого)?\b", text):
+            return 3
+        if re.search(r"\bсредн(?:ий|им|его)?\b", text):
+            return 2
+        if re.search(r"\bнизк(?:ий|им|ого)?\b", text):
+            return 1
+        if category == "платежи":
+            return 3
+        if category == "лекарства":
+            return 3
+        return 2
+
+    @staticmethod
+    def _looks_garbled(text: str) -> bool:
+        if not text:
+            return False
+        if "???" in text or "�" in text:
+            return True
+        question_count = text.count("?")
+        return question_count >= 6 and question_count >= max(1, len(text) // 4)
+
+    def _sanitize_agent_command(self, command: AgentCommand) -> AgentCommand:
+        if not self._looks_garbled(command.answer):
+            return command
+        fallback = {
+            "create_task": "Понял задачу.",
+            "delete_task": "Сейчас помогу удалить задачу.",
+            "mark_as_done": "Сейчас помогу отметить задачу выполненной.",
+            "update_task": "Сейчас помогу изменить задачу.",
+            "list_tasks": "Сейчас покажу подходящие задачи.",
+            "get_statistics": "Сейчас покажу статистику.",
+            "clarify": "Не до конца понял запрос. Напиши проще или выбери кнопку ниже.",
+        }.get(command.action, "Не до конца понял запрос. Напиши проще или выбери кнопку ниже.")
+        return AgentCommand(action=command.action, data=command.data, answer=fallback)
+
+    def _sanitize_assistant_reply(self, reply: AssistantReply) -> AssistantReply:
+        if not self._looks_garbled(reply.answer):
+            return reply
+        fallback = self._sanitize_agent_command(AgentCommand(reply.action, reply.data, reply.answer))
+        reply.answer = fallback.answer
+        if not reply.ui_hints.get("buttons"):
+            reply.ui_hints["buttons"] = list(self.dispatcher.MAIN_MENU_BUTTONS)
+        return reply
 
     @staticmethod
     def _extract_title_query_for_action(text: str) -> str:
@@ -650,9 +829,9 @@ class TaskAIAgent:
 
     @staticmethod
     def _infer_category(text: str) -> str:
-        if any(word in text for word in ("таблет", "врач", "анализ", "укол", "лекар")):
+        if any(word in text for word in ("таблет", "врач", "анализ", "укол", "лекар", "поликлин", "больниц", "прием", "приём", "витамин", "стоматолог")):
             return "лекарства"
-        if any(word in text for word in ("оплат", "счет", "счёт", "интернет", "аренд", "квартплат", "жкх")):
+        if any(word in text for word in ("оплат", "счет", "счёт", "интернет", "аренд", "квартплат", "жкх", "штраф", "налог", "ипотек", "коммунал")):
             return "платежи"
         if any(
             word in text
@@ -674,16 +853,22 @@ class TaskAIAgent:
                 "яндекс плюс",
                 "музыка",
                 "стриминг",
+                "telegram premium",
+                "discord nitro",
             )
         ):
             return "подписки"
-        if any(word in text for word in ("уборк", "стирк", "магазин", "мусор", "продукт", "быт")):
+        if any(word in text for word in ("уборк", "стирк", "магазин", "мусор", "продукт", "быт", "помыть", "почистить", "купить домой", "заказать воду")):
             return "бытовые дела"
         return "другое"
 
     @staticmethod
     def _infer_title(text: str, category: str) -> str:
         lowered = text.lower()
+        if "встать" in lowered and "на работу" in lowered:
+            return "Встать на работу"
+        if "к врачу" in lowered:
+            return "Сходить к врачу"
         if "трениров" in lowered:
             return "Тренировка"
         if "поеду" in lowered or "поездк" in lowered:
@@ -752,13 +937,9 @@ class TaskAIAgent:
         if date_context.due_at is not None:
             data["due_date"] = date_context.due_at.strftime("%Y-%m-%d %H:%M")
 
-        priority_match = re.search(r"\b(высок(?:ий|им)?|средн(?:ий|им)?|низк(?:ий|им)?)\b", lowered)
-        if priority_match:
-            mapping = {"высок": 3, "средн": 2, "низк": 1}
-            for prefix, value in mapping.items():
-                if priority_match.group(1).startswith(prefix):
-                    data["priority"] = value
-                    break
+        inferred_priority = self._infer_priority(lowered, self._infer_category(lowered))
+        if inferred_priority != 2 or re.search(r"\b(высок(?:ий|им)?|средн(?:ий|им)?|низк(?:ий|им)?|срочно)\b", lowered):
+            data["priority"] = inferred_priority
 
         category = self._infer_category(lowered)
         if category != "другое":
@@ -1768,11 +1949,18 @@ class TaskAIAgent:
             cleaned,
         )
         cleaned = re.sub(
+            r"\b(задачу|задача|дело|напоминание|приоритет|высокий|средний|низкий|срочно|не срочно|очень важно|важно)\b",
+            " ",
+            cleaned,
+        )
+        cleaned = re.sub(
             r"\b(сегодня|завтра|послезавтра|через|неделю|месяц|дня|дней|понедельник|вторник|среду|среда|четверг|пятницу|пятница|субботу|суббота|воскресенье)\b",
             " ",
             cleaned,
         )
         cleaned = re.sub(r"\b\d{1,2}[:\-\.]\d{2}\b", " ", cleaned)
+        cleaned = re.sub(r"\bв\s*\d{1,2}\s*(?:утра|вечера|дня|ночи)\b", " ", cleaned)
+        cleaned = re.sub(r"\b\d{1,2}\s*(?:утра|вечера|дня|ночи)\b", " ", cleaned)
         cleaned = re.sub(r"\b\d[\d\s]*\s*руб(?:лей|ля|\.|)\b", " ", cleaned)
         cleaned = re.sub(r"\s+", " ", cleaned).strip(" .,!?:;\"'")
         return cleaned

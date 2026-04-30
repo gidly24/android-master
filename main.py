@@ -77,19 +77,14 @@ class TaskControlApp(App):
         stats_button = GlassButton(text="Статистика")
         stats_button.bind(on_release=lambda *_: self.switch_screen("stats"))
 
-        chat_button = GlassButton(text="ИИ-чат")
-        chat_button.bind(on_release=lambda *_: self.switch_screen("chat"))
-
         self.nav_buttons = {
             "tasks": tasks_button,
             "archive": archive_button,
             "stats": stats_button,
-            "chat": chat_button,
         }
         navigation.add_widget(tasks_button)
         navigation.add_widget(archive_button)
         navigation.add_widget(stats_button)
-        navigation.add_widget(chat_button)
         return navigation
 
     def _build_screens(self):
@@ -98,11 +93,11 @@ class TaskControlApp(App):
             name="tasks",
             service=self.service,
             on_tasks_changed=self.refresh_all_screens,
+            on_open_chat=lambda: self.switch_screen("chat"),
         )
         self.archive_screen = ArchiveScreen(
             name="archive",
             service=self.service,
-            on_delete=self.task_list_screen.confirm_delete,
             on_clear_all=self.clear_archive,
         )
         self.stats_screen = StatsScreen(name="stats", service=self.service)
@@ -136,6 +131,8 @@ class TaskControlApp(App):
             self.archive_screen.refresh_archive()
         if screen_name == "stats":
             self.stats_screen.refresh_stats()
+        if screen_name == "chat":
+            self.chat_screen._scroll_to_bottom()
 
         Clock.schedule_once(self._force_layout_pass, 0)
 

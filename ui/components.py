@@ -1,11 +1,15 @@
 from kivy.clock import Clock
 from kivy.graphics import Color, Ellipse, Line, Rectangle, RoundedRectangle
 from kivy.metrics import dp
+from kivy.properties import BooleanProperty
+from kivy.properties import ListProperty
 from kivy.uix.boxlayout import BoxLayout
+from kivy.uix.behaviors import ButtonBehavior
 from kivy.uix.button import Button
 from kivy.uix.label import Label
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.textinput import TextInput
+from kivy.uix.widget import Widget
 
 
 TEXT_PRIMARY = (0.1, 0.11, 0.14, 1)
@@ -288,6 +292,81 @@ class CheckIconButton(SuccessGlassButton):
         mid_y = self.y + self.height * 0.36
         high = self.y + self.height * 0.58
         self._icon_line.points = [left, low, mid_x, mid_y, right, high]
+
+    def set_selected(self, selected):
+        if selected:
+            self.set_palette(
+                fill_color=(0.25, 0.65, 0.43, 1),
+                border_color=(0.25, 0.65, 0.43, 1),
+                text_color=(1, 1, 1, 1),
+            )
+        else:
+            self.set_palette(
+                fill_color=SUCCESS_FILL,
+                border_color=SUCCESS_BORDER,
+                text_color=(1, 1, 1, 1),
+            )
+
+
+class IOSSwitch(ButtonBehavior, Widget):
+    """Custom iOS-like toggle with app palette."""
+
+    active = BooleanProperty(False)
+    active_color = ListProperty([0.31, 0.75, 0.42, 1])
+    inactive_color = ListProperty([0.84, 0.87, 0.92, 1])
+    thumb_color = ListProperty([1, 1, 1, 1])
+    border_color = ListProperty([0.8, 0.83, 0.89, 1])
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("size_hint", (None, None))
+        kwargs.setdefault("size", (dp(54), dp(32)))
+        super().__init__(**kwargs)
+        with self.canvas.before:
+            self._track_color = Color()
+            self._track = RoundedRectangle()
+        with self.canvas.after:
+            self._border_color = Color()
+            self._border = Line(width=0.9)
+            self._thumb_shadow_color = Color(0, 0, 0, 0.1)
+            self._thumb_shadow = Ellipse()
+            self._thumb_color = Color()
+            self._thumb = Ellipse()
+
+        self.bind(
+            pos=self._update_canvas,
+            size=self._update_canvas,
+            active=self._update_canvas,
+            disabled=self._update_canvas,
+        )
+        Clock.schedule_once(self._update_canvas, 0)
+
+    def on_press(self):
+        if not self.disabled:
+            self.active = not self.active
+
+    def _update_canvas(self, *_):
+        radius = self.height / 2
+        track_color = self.active_color if self.active else self.inactive_color
+        if self.disabled:
+            track_color = [track_color[0], track_color[1], track_color[2], 0.45]
+
+        self._track_color.rgba = track_color
+        self._track.pos = self.pos
+        self._track.size = self.size
+        self._track.radius = [radius]
+
+        self._border_color.rgba = self.border_color if not self.active else self.active_color
+        self._border.rounded_rectangle = (self.x, self.y, self.width, self.height, radius)
+
+        thumb_size = max(self.height - dp(4), dp(18))
+        thumb_y = self.y + (self.height - thumb_size) / 2
+        thumb_x = self.right - thumb_size - dp(2) if self.active else self.x + dp(2)
+
+        self._thumb_shadow.pos = (thumb_x, thumb_y - dp(1))
+        self._thumb_shadow.size = (thumb_size, thumb_size)
+        self._thumb_color.rgba = self.thumb_color if not self.disabled else [1, 1, 1, 0.8]
+        self._thumb.pos = (thumb_x, thumb_y)
+        self._thumb.size = (thumb_size, thumb_size)
 
 
 class GlassTextInput(TextInput):

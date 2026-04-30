@@ -246,7 +246,7 @@ class TaskService:
                 due_time_part = due_time_part[:5]
             else:
                 due_date_part = normalized_due
-                due_time_part = "23:59"
+                due_time_part = ""
 
         recurrence_key = (payload.get("recurrence") or "").strip().lower()
         recurrence_map = {
@@ -418,7 +418,7 @@ class TaskService:
                 task_data["due_time"] = task_data["due_time"][:5]
             else:
                 task_data["due_date"] = normalized_due
-                task_data["due_time"] = task.due_time or "23:59"
+                task_data["due_time"] = ""
 
         self.save_task(task_data, task.id)
         return {"updated": True, "task_id": task.id, "answer": f"Готово, обновил задачу «{task.title}»."}

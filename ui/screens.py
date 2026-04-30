@@ -292,10 +292,11 @@ class TaskRow(GlassPane):
 class TaskListScreen(Screen):
     """Main screen with summary, filters and task list."""
 
-    def __init__(self, service, on_tasks_changed=None, **kwargs):
+    def __init__(self, service, on_tasks_changed=None, on_open_chat=None, **kwargs):
         super().__init__(**kwargs)
         self.service = service
         self.on_tasks_changed = on_tasks_changed
+        self.on_open_chat = on_open_chat
         self.filters_expanded = False
         self._build_ui()
         self.refresh_tasks()
@@ -408,7 +409,7 @@ class TaskListScreen(Screen):
         return container
 
     def _build_footer(self):
-        footer = BoxLayout(size_hint_y=None, height=dp(58))
+        footer = BoxLayout(size_hint_y=None, height=dp(58), spacing=dp(10))
         add_button = PrimaryGlassButton(
             text="Добавить задачу",
             height=dp(54),
@@ -416,8 +417,20 @@ class TaskListScreen(Screen):
             radius=dp(27),
         )
         add_button.bind(on_release=lambda *_: self.open_task_form())
+        chat_button = GlassButton(
+            text="ИИ-чат",
+            height=dp(54),
+            font_size=FONT_SIZE,
+            radius=dp(27),
+        )
+        chat_button.bind(on_release=lambda *_: self._open_chat())
         footer.add_widget(add_button)
+        footer.add_widget(chat_button)
         return footer
+
+    def _open_chat(self):
+        if self.on_open_chat is not None:
+            self.on_open_chat()
 
     def refresh_tasks(self):
         self.task_container.clear_widgets()
@@ -656,10 +669,9 @@ class StatsScreen(Screen):
 class ArchiveScreen(Screen):
     """Screen with archived completed tasks."""
 
-    def __init__(self, service, on_delete, on_clear_all=None, **kwargs):
+    def __init__(self, service, on_clear_all=None, **kwargs):
         super().__init__(**kwargs)
         self.service = service
-        self.on_delete = on_delete
         self.on_clear_all = on_clear_all
         self._build_ui()
         self.refresh_archive()
@@ -760,7 +772,7 @@ class ArchiveScreen(Screen):
             card.add_widget(meta)
 
             delete_button = DangerGlassButton(text="Удалить", height=dp(40))
-            delete_button.bind(on_release=lambda *_ , task_id=task.id: self.on_delete(task_id))
+            delete_button.bind(on_release=lambda *_, task_id=task.id: self.confirm_delete(task_id))
             card.add_widget(delete_button)
 
             self.archive_container.add_widget(card)
@@ -773,3 +785,77 @@ class ArchiveScreen(Screen):
         else:
             self.service.clear_archived_tasks()
             self.refresh_archive()
+
+    def confirm_delete(self, task_id):
+        popup = ModalView(
+            size_hint=(0.84, None),
+            height=dp(230),
+            auto_dismiss=True,
+            background="",
+            background_color=(0, 0, 0, 0),
+        )
+        popup.overlay_color = (0.1, 0.13, 0.2, 0.24)
+
+        content = GlassPane(
+            orientation="vertical",
+            spacing=dp(14),
+            padding=(dp(16), dp(18), dp(16), dp(16)),
+            fill_color=(1, 1, 1, 1),
+            border_color=(0.85, 0.87, 0.91, 1),
+            radius=dp(30),
+        )
+
+        header = Label(
+            text="Удаление из архива",
+            color=TEXT_PRIMARY,
+            size_hint_y=None,
+            font_size=FONT_SIZE,
+            bold=True,
+            halign="left",
+            valign="middle",
+        )
+        bind_text_size(header)
+        bind_auto_height(header, min_height=dp(30), extra=dp(4))
+        content.add_widget(header)
+
+        message = Label(
+            text="Удалить эту задачу из архива без возможности восстановления?",
+            color=TEXT_PRIMARY,
+            size_hint_y=None,
+            halign="left",
+            valign="middle",
+            font_size=FONT_SIZE,
+        )
+        bind_text_size(message)
+        bind_auto_height(message, min_height=dp(50))
+        content.add_widget(message)
+
+        note = Label(
+            text="Задача будет удалена из базы навсегда.",
+            color=TEXT_MUTED,
+            size_hint_y=None,
+            halign="left",
+            valign="middle",
+            font_size=FONT_SIZE,
+        )
+        bind_text_size(note)
+        bind_auto_height(note, min_height=dp(24), extra=dp(4))
+        content.add_widget(note)
+
+        buttons = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(10))
+        cancel_button = GlassButton(text="Отмена", height=dp(46))
+        cancel_button.bind(on_release=lambda *_: popup.dismiss())
+
+        delete_button = DangerGlassButton(text="Удалить", height=dp(46))
+        delete_button.bind(on_release=lambda *_: self._delete_and_close(task_id, popup))
+
+        buttons.add_widget(cancel_button)
+        buttons.add_widget(delete_button)
+        content.add_widget(buttons)
+        popup.add_widget(content)
+        popup.open()
+
+    def _delete_and_close(self, task_id, popup):
+        self.service.delete_task(task_id)
+        popup.dismiss()
+        self.refresh_archive()
