@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c ' *)",
+      "Bash(cd C:\\\\\\\\Users\\\\\\\\ivn\\\\\\\\PycharmProjects\\\\\\\\android-master)",
+      "Bash(python main.py)"
+    ]
+  }
+}
