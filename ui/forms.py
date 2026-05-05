@@ -8,6 +8,8 @@ from kivy.uix.label import Label
 from kivy.uix.modalview import ModalView
 from kivy.uix.scrollview import ScrollView
 
+from ui.android_pickers import open_date_picker, open_time_picker
+
 from models import CATEGORIES, PRIORITY_OPTIONS, RECURRENCE_OPTIONS
 from ui.components import (
     DangerGlassButton,
@@ -112,11 +114,18 @@ class TaskFormPopup(ModalView):
         form = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)
         form.bind(minimum_height=form.setter("height"))
 
-        self.title_input = GlassTextInput(multiline=False, hint_text="Введите название задачи")
+        self.title_input = GlassTextInput(
+            multiline=False,
+            hint_text="Введите название задачи",
+            input_type="text",
+            keyboard_suggestions=True,
+        )
         self.description_input = GlassTextInput(
             multiline=True,
             height=dp(120),
             hint_text="Краткое описание или комментарий",
+            input_type="text",
+            keyboard_suggestions=True,
         )
         category_values = tuple(category.capitalize() for category in CATEGORIES)
         self.category_spinner = GlassSpinner(text=category_values[0], values=category_values)
@@ -348,18 +357,24 @@ class TaskFormPopup(ModalView):
 
     def open_calendar(self, allow_disable_on_cancel=False):
         selected_date = self.due_date_input.text.strip() or date_cls.today().isoformat()
+        on_cancel = self._cancel_date_selection if allow_disable_on_cancel else None
+        if open_date_picker(selected_date, on_select=self.set_due_date, on_cancel=on_cancel):
+            return
         popup = CalendarPickerModal(
             initial_date=selected_date,
             on_select=self.set_due_date,
-            on_cancel=self._cancel_date_selection if allow_disable_on_cancel else None,
+            on_cancel=on_cancel,
         )
         popup.open()
 
     def open_time_picker(self, allow_disable_on_cancel=False):
+        on_cancel = self._cancel_time_selection if allow_disable_on_cancel else None
+        if open_time_picker(self.due_time_input.text.strip(), on_select=self.set_due_time, on_cancel=on_cancel):
+            return
         popup = TimePickerModal(
             initial_time=self.due_time_input.text.strip(),
             on_select=self.set_due_time,
-            on_cancel=self._cancel_time_selection if allow_disable_on_cancel else None,
+            on_cancel=on_cancel,
         )
         popup.open()
 

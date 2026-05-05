@@ -55,8 +55,7 @@ class TaskControlApp(App):
         return root
 
     def on_start(self):
-        for delay in (0, 0.1, 0.25, 0.5, 1.0):
-            Clock.schedule_once(self._force_layout_pass, delay)
+        Clock.schedule_once(self._force_layout_pass, 0)
         Window.bind(size=lambda *_: Clock.schedule_once(self._force_layout_pass, 0))
 
     def _build_navigation(self):
@@ -113,9 +112,12 @@ class TaskControlApp(App):
         return self.screen_manager
 
     def refresh_all_screens(self):
+        current = self.screen_manager.current
         self.task_list_screen.refresh_tasks()
-        self.archive_screen.refresh_archive()
-        self.stats_screen.refresh_stats()
+        if current == "archive":
+            self.archive_screen.refresh_archive()
+        if current == "stats":
+            self.stats_screen.refresh_stats()
 
     def clear_archive(self):
         self.service.clear_archived_tasks()
@@ -125,16 +127,12 @@ class TaskControlApp(App):
         self.screen_manager.current = screen_name
         self._update_navigation(screen_name)
 
-        if screen_name == "tasks":
-            self.task_list_screen.refresh_tasks()
         if screen_name == "archive":
             self.archive_screen.refresh_archive()
-        if screen_name == "stats":
+        elif screen_name == "stats":
             self.stats_screen.refresh_stats()
-        if screen_name == "chat":
+        elif screen_name == "chat":
             self.chat_screen._scroll_to_bottom()
-
-        Clock.schedule_once(self._force_layout_pass, 0)
 
     def _update_navigation(self, active_name):
         for name, button in self.nav_buttons.items():
@@ -152,13 +150,8 @@ class TaskControlApp(App):
                 )
 
     def _force_layout_pass(self, *_):
-        self._layout_recursive(self.root_widget)
-
-    def _layout_recursive(self, widget):
-        if hasattr(widget, "do_layout"):
-            widget.do_layout()
-        for child in widget.children:
-            self._layout_recursive(child)
+        if hasattr(self.root_widget, "do_layout"):
+            self.root_widget.do_layout()
 
 
 if __name__ == "__main__":

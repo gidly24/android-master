@@ -62,6 +62,12 @@ class DatabaseManager:
                 connection.execute(
                     "ALTER TABLE tasks ADD COLUMN archived_at TEXT"
                 )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_active ON tasks (is_archived, status, due_date)"
+            )
+            connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_tasks_archived ON tasks (is_archived, archived_at)"
+            )
 
     def get_app_state(self, key: str):
         with self._connect() as connection:
@@ -133,6 +139,85 @@ class DatabaseManager:
     def delete_task(self, task_id: int):
         with self._connect() as connection:
             connection.execute("DELETE FROM tasks WHERE id = ?", (task_id,))
+
+    def update_overdue_statuses(self, now_iso: str):
+        """Bulk-update task statuses in SQL — no Python iteration needed."""
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE tasks
+                SET status = CASE
+                    WHEN due_date = '' THEN 'активна'
+                    WHEN (due_date || ' ' || COALESCE(NULLIF(due_time, ''), '23:59')) < ? THEN 'просрочена'
+                    ELSE 'активна'
+                END,
+                updated_at = CURRENT_TIMESTAMP
+                WHERE is_archived = 0
+                  AND status != 'выполнена'
+                  AND status != CASE
+                    WHEN due_date = '' THEN 'активна'
+                    WHEN (due_date || ' ' || COALESCE(NULLIF(due_time, ''), '23:59')) < ? THEN 'просрочена'
+                    ELSE 'активна'
+                END
+                """,
+                (now_iso, now_iso),
+            )
+
+    def get_tasks_filtered(self, status_filter: str, category_filter: str, search_text: str):
+        """Return active tasks with optional SQL-level filtering."""
+        conditions = ["is_archived = 0"]
+        params: list = []
+
+        if status_filter and status_filter != "все":
+            conditions.append("LOWER(status) = ?")
+            params.append(status_filter.lower())
+
+        if category_filter and category_filter != "все":
+            conditions.append("LOWER(category) = ?")
+            params.append(category_filter.lower())
+
+        where = " AND ".join(conditions)
+        query = f"""
+            SELECT * FROM tasks
+            WHERE {where}
+            ORDER BY
+                CASE WHEN due_date = '' THEN 1 ELSE 0 END,
+                due_date ASC,
+                CASE WHEN due_time = '' THEN 1 ELSE 0 END,
+                due_time ASC,
+                priority DESC,
+                id DESC
+        """
+        with self._connect() as connection:
+            rows = connection.execute(query, params).fetchall()
+
+        tasks = [self._row_to_task(row) for row in rows]
+
+        if search_text:
+            needle = search_text.lower()
+            tasks = [t for t in tasks if needle in t.title.lower()]
+
+        return tasks
+
+    def get_stats(self) -> dict:
+        """Return task counts via SQL aggregation."""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT
+                    SUM(CASE WHEN is_archived = 0 THEN 1 ELSE 0 END) AS total,
+                    SUM(CASE WHEN status = 'активна'   AND is_archived = 0 THEN 1 ELSE 0 END) AS active,
+                    SUM(CASE WHEN status = 'выполнена' AND is_archived = 1 THEN 1 ELSE 0 END) AS completed,
+                    SUM(CASE WHEN status = 'просрочена' AND is_archived = 0 THEN 1 ELSE 0 END) AS overdue
+                FROM tasks
+                """
+            ).fetchone()
+        return {
+            "total": rows["total"] or 0,
+            "active": rows["active"] or 0,
+            "completed": rows["completed"] or 0,
+            "overdue": rows["overdue"] or 0,
+        }
 
     def clear_archived_tasks(self):
         with self._connect() as connection:

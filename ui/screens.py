@@ -378,6 +378,8 @@ class TaskListScreen(Screen):
             hint_text="Поиск по названию",
             multiline=False,
             height=dp(48),
+            input_type="text",
+            keyboard_suggestions=True,
         )
 
         filter_row = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))
@@ -690,6 +692,8 @@ class ArchiveScreen(Screen):
             hint_text="Поиск по названию",
             multiline=False,
             height=dp(48),
+            input_type="text",
+            keyboard_suggestions=True,
         )
         container.add_widget(self.search_input)
 

@@ -101,25 +101,13 @@ class TaskService:
 
     def get_tasks(self, status_filter="все", category_filter="все", search_text=""):
         self.update_overdue_tasks()
-        tasks = self.database.get_all_tasks()
-        result = []
-        normalized_status = (status_filter or "все").strip().lower()
-        normalized_category = (category_filter or "все").strip().lower()
-
-        for task in tasks:
-            if task.is_archived:
-                continue
-            if normalized_status != "все" and task.status.lower() != normalized_status:
-                continue
-            if normalized_category != "все" and task.category.lower() != normalized_category:
-                continue
-            if search_text and search_text.lower() not in task.title.lower():
-                continue
-            result.append(task)
-        return result
+        return self.database.get_tasks_filtered(
+            status_filter=(status_filter or "все").strip().lower(),
+            category_filter=(category_filter or "все").strip().lower(),
+            search_text=(search_text or "").strip(),
+        )
 
     def get_task(self, task_id: int):
-        self.update_overdue_tasks()
         return self.database.get_task(task_id)
 
     def get_archived_tasks(self, search_text=""):
@@ -168,7 +156,6 @@ class TaskService:
         if not normalized_query:
             return []
 
-        self.update_overdue_tasks()
         source_tasks = self.database.get_all_tasks() if include_archived else self.get_tasks()
         exact_matches = [task for task in source_tasks if task.title.strip().lower() == normalized_query]
         if exact_matches:
@@ -204,35 +191,17 @@ class TaskService:
         self.database.update_task(task)
 
     def update_overdue_tasks(self):
-        now = datetime.now()
-        tasks = self.database.get_all_tasks()
-
-        for task in tasks:
-            if task.is_archived:
-                continue
-            if task.status == "выполнена":
-                continue
-            if not task.due_date:
-                new_status = "активна"
-                if task.status != new_status:
-                    task.status = new_status
-                    self.database.update_task(task)
-                continue
-
-            due_at = self.parse_due_datetime(task.due_date, task.due_time)
-            new_status = "просрочена" if due_at < now else "активна"
-            if task.status != new_status:
-                task.status = new_status
-                self.database.update_task(task)
+        now_iso = datetime.now().strftime("%Y-%m-%d %H:%M")
+        self.database.update_overdue_statuses(now_iso)
 
     def get_statistics(self):
         self.update_overdue_tasks()
-        tasks = self.database.get_all_tasks()
+        s = self.database.get_stats()
         return {
-            "Всего задач": len([task for task in tasks if not task.is_archived]),
-            "Активных": len([task for task in tasks if task.status == "активна" and not task.is_archived]),
-            "Выполненных": len([task for task in tasks if task.status == "выполнена" and task.is_archived]),
-            "Просроченных": len([task for task in tasks if task.status == "просрочена" and not task.is_archived]),
+            "Всего задач": s["total"],
+            "Активных": s["active"],
+            "Выполненных": s["completed"],
+            "Просроченных": s["overdue"],
         }
 
     def create_task_from_ai(self, payload: dict):
@@ -471,19 +440,15 @@ class TaskService:
 
     def get_statistics_for_ai(self):
         self.update_overdue_tasks()
-        tasks = self.database.get_all_tasks()
-        active = len([task for task in tasks if task.status == "активна" and not task.is_archived])
-        completed = len([task for task in tasks if task.status == "выполнена" and task.is_archived])
-        overdue = len([task for task in tasks if task.status == "просрочена" and not task.is_archived])
-        total = len([task for task in tasks if not task.is_archived])
+        s = self.database.get_stats()
         return {
-            "total": total,
-            "active": active,
-            "completed": completed,
-            "overdue": overdue,
+            "total": s["total"],
+            "active": s["active"],
+            "completed": s["completed"],
+            "overdue": s["overdue"],
             "answer": (
-                f"Сейчас у тебя {total} задач: активных {active}, "
-                f"выполненных {completed}, просроченных {overdue}."
+                f"Сейчас у тебя {s['total']} задач: активных {s['active']}, "
+                f"выполненных {s['completed']}, просроченных {s['overdue']}."
             ),
         }
 

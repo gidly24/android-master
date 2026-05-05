@@ -138,6 +138,8 @@ class ChatScreen(Screen):
             hint_text="Напиши команду обычной фразой",
             multiline=False,
             height=dp(48),
+            input_type="text",
+            keyboard_suggestions=True,
         )
         self.input.bind(on_text_validate=lambda *_: self.send_message())
         self.status_label = Label(
