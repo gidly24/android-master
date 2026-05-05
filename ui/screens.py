@@ -27,8 +27,10 @@ from ui.components import (
     PrimaryGlassButton,
     SectionTitle,
     SuccessGlassButton,
+    SURFACE_BORDER,
     TEXT_MUTED,
     TEXT_PRIMARY,
+    TEXT_SECONDARY,
     bind_auto_height,
     bind_text_size,
 )
@@ -86,7 +88,7 @@ class TaskRow(GlassPane):
         title_box.bind(minimum_height=title_box.setter("height"))
         title = Label(
             text=self.task.title,
-            color=(1, 1, 1, 1),
+            color=TEXT_PRIMARY,
             font_size=FONT_SIZE,
             bold=True,
             size_hint_y=None,
@@ -99,7 +101,7 @@ class TaskRow(GlassPane):
 
         expand_hint = Label(
             text="Скрыть" if self.expanded else "Подробнее",
-            color=(1, 1, 1, 0.8),
+            color=TEXT_SECONDARY,
             font_size=FONT_SIZE,
             size_hint_y=None,
             halign="left",
@@ -123,15 +125,13 @@ class TaskRow(GlassPane):
         meta_row.add_widget(
             BadgeLabel(
                 text=self.task.category.capitalize(),
-                fill_color=(1, 1, 1, 0.2),
-                border_color=(1, 1, 1, 0.28),
-                text_color=(1, 1, 1, 1),
+                fill_color=(0.3, 0.3, 0.3, 1),
+                text_color=TEXT_PRIMARY,
             )
         )
         self.countdown_label = BadgeLabel(
             text="",
-            fill_color=(1, 1, 1, 0.94),
-            border_color=(1, 1, 1, 1),
+            fill_color=(0.25, 0.25, 0.25, 1),
             text_color=self._countdown_text_color(),
             font_size=FONT_SIZE,
         )
@@ -144,7 +144,7 @@ class TaskRow(GlassPane):
             description = self.task.description or "Описание не указано."
             description_label = Label(
                 text=f"Описание: {description}",
-                color=(1, 1, 1, 0.9),
+                color=TEXT_PRIMARY,
                 size_hint_y=None,
                 halign="left",
                 valign="top",
@@ -363,14 +363,15 @@ class TaskListScreen(Screen):
         return container
 
     def _build_filters_panel(self):
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         container = GlassPane(
             orientation="vertical",
             spacing=dp(10),
             padding=(dp(12), dp(12), dp(12), dp(12)),
             size_hint_y=None,
             height=dp(178),
-            fill_color=(1, 1, 1, 1),
-            border_color=(0.85, 0.87, 0.91, 1),
+            fill_color=SURFACE_FILL,
+            border_color=SURFACE_BORDER,
             radius=dp(24),
         )
 
@@ -472,6 +473,7 @@ class TaskListScreen(Screen):
         self._sync_filter_panel()
 
     def _sync_filter_panel(self):
+        from ui.components import PRIMARY_FILL, BG_TERTIARY
         if self.filters_expanded:
             if self.filter_panel.parent is None:
                 self.filter_host.add_widget(self.filter_panel)
@@ -479,9 +481,8 @@ class TaskListScreen(Screen):
             self.filter_host.opacity = 1
             self.filter_toggle_button.text = "Скрыть"
             self.filter_toggle_button.set_palette(
-                fill_color=(0.91, 0.95, 1, 1),
-                border_color=(0.33, 0.66, 0.95, 1),
-                text_color=TEXT_PRIMARY,
+                fill_color=PRIMARY_FILL,
+                text_color=(1, 1, 1, 1),
             )
         else:
             if self.filter_panel.parent is self.filter_host:
@@ -490,8 +491,7 @@ class TaskListScreen(Screen):
             self.filter_host.opacity = 0
             self.filter_toggle_button.text = "Фильтр"
             self.filter_toggle_button.set_palette(
-                fill_color=(1, 1, 1, 0.98),
-                border_color=(0.84, 0.87, 0.92, 1),
+                fill_color=BG_TERTIARY,
                 text_color=TEXT_PRIMARY,
             )
 
@@ -533,14 +533,15 @@ class TaskListScreen(Screen):
             background="",
             background_color=(0, 0, 0, 0),
         )
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         popup.overlay_color = (0.1, 0.13, 0.2, 0.24)
 
         content = GlassPane(
             orientation="vertical",
             spacing=dp(14),
             padding=(dp(16), dp(18), dp(16), dp(16)),
-            fill_color=(1, 1, 1, 1),
-            border_color=(0.85, 0.87, 0.91, 1),
+            fill_color=SURFACE_FILL,
+            border_color=SURFACE_BORDER,
             radius=dp(30),
         )
 
@@ -616,8 +617,9 @@ class StatsScreen(Screen):
         root = BoxLayout(orientation="vertical", spacing=dp(12))
         root.add_widget(SectionTitle(text="Статистика"))
 
+        from ui.components import BG_TERTIARY
         for title, fill_color, border_color in [
-            ("Всего задач", (1, 1, 1, 1), (0.85, 0.87, 0.91, 1)),
+            ("Всего задач", BG_TERTIARY, SURFACE_BORDER),
             ("Активных", CARD_ACTIVE_FILL, CARD_ACTIVE_BORDER),
             ("Выполненных", CARD_DONE_FILL, CARD_DONE_BORDER),
             ("Просроченных", CARD_OVERDUE_FILL, CARD_OVERDUE_BORDER),
@@ -633,13 +635,13 @@ class StatsScreen(Screen):
             )
             title_label = Label(
                 text=title,
-                color=TEXT_PRIMARY if title == "Всего задач" else (1, 1, 1, 0.95),
+                color=TEXT_PRIMARY,
                 font_size=FONT_SIZE,
                 bold=True,
             )
             value_label = Label(
                 text="0",
-                color=TEXT_PRIMARY if title == "Всего задач" else (1, 1, 1, 1),
+                color=TEXT_PRIMARY,
                 font_size=FONT_SIZE,
                 bold=True,
             )
@@ -739,14 +741,15 @@ class ArchiveScreen(Screen):
             self.archive_container.add_widget(empty_label)
             return
 
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         for task in tasks:
             card = GlassPane(
                 orientation="vertical",
                 spacing=dp(8),
                 padding=(dp(14), dp(12), dp(14), dp(12)),
                 size_hint_y=None,
-                fill_color=(1, 1, 1, 1),
-                border_color=(0.85, 0.87, 0.91, 1),
+                fill_color=SURFACE_FILL,
+                border_color=SURFACE_BORDER,
             )
             card.bind(minimum_height=card.setter("height"))
 
@@ -798,14 +801,15 @@ class ArchiveScreen(Screen):
             background="",
             background_color=(0, 0, 0, 0),
         )
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         popup.overlay_color = (0.1, 0.13, 0.2, 0.24)
 
         content = GlassPane(
             orientation="vertical",
             spacing=dp(14),
             padding=(dp(16), dp(18), dp(16), dp(16)),
-            fill_color=(1, 1, 1, 1),
-            border_color=(0.85, 0.87, 0.91, 1),
+            fill_color=SURFACE_FILL,
+            border_color=SURFACE_BORDER,
             radius=dp(30),
         )
 

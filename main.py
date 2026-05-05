@@ -38,7 +38,7 @@ class TaskControlApp(App):
 
     def build(self):
         self.title = "Контроль сроков задач"
-        Window.clearcolor = (1, 1, 1, 1)
+        Window.clearcolor = (0.12, 0.12, 0.12, 1)
         if platform not in ("android", "ios"):
             Window.size = (430, 780)
 

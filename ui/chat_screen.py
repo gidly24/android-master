@@ -8,7 +8,7 @@ from kivy.uix.screenmanager import Screen
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
 
-from ui.components import FONT_SIZE, GlassButton, GlassPane, GlassTextInput, TEXT_MUTED, TEXT_PRIMARY, bind_auto_height, bind_text_size
+from ui.components import FONT_SIZE, GlassButton, GlassPane, GlassTextInput, TEXT_MUTED, TEXT_PRIMARY, PRIMARY_FILL, BG_TERTIARY, bind_auto_height, bind_text_size
 
 
 class ChatBubble(GlassPane):
@@ -19,15 +19,15 @@ class ChatBubble(GlassPane):
             size_hint=(0.9, None),
             padding=(dp(12), dp(10), dp(12), dp(10)),
             spacing=dp(6),
-            fill_color=(0.33, 0.66, 0.95, 1) if is_user else (1, 1, 1, 0.98),
-            border_color=(0.33, 0.66, 0.95, 1) if is_user else (0.84, 0.87, 0.92, 1),
+            fill_color=PRIMARY_FILL if is_user else BG_TERTIARY,
+            border_color=PRIMARY_FILL if is_user else BG_TERTIARY,
             **kwargs,
         )
         self.bind(minimum_height=self.setter("height"))
 
         title = Label(
             text="Вы" if is_user else "Ассистент",
-            color=(1, 1, 1, 0.95) if is_user else TEXT_MUTED,
+            color=(1, 1, 1, 1) if is_user else TEXT_MUTED,
             size_hint_y=None,
             font_size=FONT_SIZE,
             bold=True,
@@ -267,13 +267,14 @@ class ChatScreen(Screen):
         return container
 
     def _build_draft_preview(self, draft: dict[str, str]):
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         pane = GlassPane(
             orientation="vertical",
             spacing=dp(4),
             padding=(dp(10), dp(8), dp(10), dp(8)),
             size_hint_y=None,
-            fill_color=(0.96, 0.97, 0.99, 1),
-            border_color=(0.84, 0.87, 0.92, 1),
+            fill_color=SURFACE_FILL,
+            border_color=SURFACE_BORDER,
         )
         pane.bind(minimum_height=pane.setter("height"))
         for label, value in draft.items():

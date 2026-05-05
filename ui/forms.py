@@ -88,12 +88,13 @@ class TaskFormPopup(ModalView):
         self._sync_deadline_controls()
 
     def _build_content(self):
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         root = GlassPane(
             orientation="vertical",
             spacing=dp(10),
             padding=(dp(16), dp(18), dp(16), dp(16)),
-            fill_color=(1, 1, 1, 1),
-            border_color=(0.85, 0.87, 0.91, 1),
+            fill_color=SURFACE_FILL,
+            border_color=SURFACE_BORDER,
             radius=dp(30),
         )
 
@@ -436,12 +437,13 @@ class CalendarPickerModal(ModalView):
         self.refresh_days()
 
     def _build_content(self):
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         root = GlassPane(
             orientation="vertical",
             spacing=dp(12),
             padding=(dp(16), dp(18), dp(16), dp(16)),
-            fill_color=(1, 1, 1, 1),
-            border_color=(0.85, 0.87, 0.91, 1),
+            fill_color=SURFACE_FILL,
+            border_color=SURFACE_BORDER,
             radius=dp(30),
         )
 
@@ -631,12 +633,13 @@ class TimePickerModal(ModalView):
         return "23", "59"
 
     def _build_content(self, hour, minute):
+        from ui.components import SURFACE_FILL, SURFACE_BORDER
         root = GlassPane(
             orientation="vertical",
             spacing=dp(14),
             padding=(dp(16), dp(18), dp(16), dp(16)),
-            fill_color=(1, 1, 1, 1),
-            border_color=(0.85, 0.87, 0.91, 1),
+            fill_color=SURFACE_FILL,
+            border_color=SURFACE_BORDER,
             radius=dp(30),
         )
 
