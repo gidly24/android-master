@@ -4,6 +4,7 @@ from kivy.uix.modalview import ModalView
 from kivy.uix.scrollview import ScrollView
 
 from models import CATEGORIES, PRIORITY_OPTIONS, RECURRENCE_OPTIONS
+from ui.android_pickers import open_date_picker, open_time_picker
 from ui.components import (
     APP_BACKGROUND,
     FONT_NAME,
@@ -14,6 +15,7 @@ from ui.components import (
     TRANSPARENT_APP,
     DangerButton,
     FilledButton,
+    MaterialButton,
     MaterialLabel as Label,
     MaterialCard,
     MaterialSpinner,
@@ -84,8 +86,8 @@ class TaskFormPopup(ModalView):
         form.add_widget(self._field("Название", self.title_input))
         form.add_widget(self._field("Описание", self.description_input))
         form.add_widget(self._field("Категория", self.category_spinner))
-        form.add_widget(self._field("Дата дедлайна", self.due_date_input))
-        form.add_widget(self._field("Время дедлайна", self.due_time_input))
+        form.add_widget(self._field("Дата дедлайна", self._date_field()))
+        form.add_widget(self._field("Время дедлайна", self._time_field()))
         form.add_widget(self._field("Периодичность", self.recurrence_spinner))
         form.add_widget(self._field("Приоритет", self.priority_spinner))
 
@@ -144,6 +146,60 @@ class TaskFormPopup(ModalView):
         box.add_widget(widget)
         box.bind(minimum_height=box.setter("height"))
         return box
+
+    def _date_field(self):
+        row = BoxLayout(orientation="horizontal", spacing=dp(6), size_hint_y=None, height=dp(46))
+        pick = MaterialButton(text="Выбрать", size_hint_x=None, width=dp(110))
+        clear = MaterialButton(text="Очистить", size_hint_x=None, width=dp(110))
+        pick.bind(on_release=lambda *_: self._open_date_picker())
+        clear.bind(on_release=lambda *_: self._clear_date())
+        row.add_widget(self.due_date_input)
+        row.add_widget(pick)
+        row.add_widget(clear)
+        return row
+
+    def _time_field(self):
+        row = BoxLayout(orientation="horizontal", spacing=dp(6), size_hint_y=None, height=dp(46))
+        pick = MaterialButton(text="Выбрать", size_hint_x=None, width=dp(110))
+        clear = MaterialButton(text="Очистить", size_hint_x=None, width=dp(110))
+        pick.bind(on_release=lambda *_: self._open_time_picker())
+        clear.bind(on_release=lambda *_: self._clear_time())
+        row.add_widget(self.due_time_input)
+        row.add_widget(pick)
+        row.add_widget(clear)
+        return row
+
+    def _open_date_picker(self):
+        opened = open_date_picker(
+            initial_date=self.due_date_input.text.strip(),
+            on_select=self._on_date_selected,
+        )
+        if not opened:
+            self.error_label.text = "Выбор даты доступен на Android. Здесь используйте ручной ввод."
+
+    def _open_time_picker(self):
+        opened = open_time_picker(
+            initial_time=self.due_time_input.text.strip(),
+            on_select=self._on_time_selected,
+        )
+        if not opened:
+            self.error_label.text = "Выбор времени доступен на Android. Здесь используйте ручной ввод."
+
+    def _on_date_selected(self, selected_date):
+        self.error_label.text = ""
+        self.due_date_input.text = selected_date or ""
+
+    def _on_time_selected(self, selected_time):
+        self.error_label.text = ""
+        self.due_time_input.text = selected_time or ""
+
+    def _clear_date(self):
+        self.due_date_input.text = ""
+        self.error_label.text = ""
+
+    def _clear_time(self):
+        self.due_time_input.text = ""
+        self.error_label.text = ""
 
     def _fill_data(self):
         self.title_input.text = self.task.title or ""

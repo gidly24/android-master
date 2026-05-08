@@ -39,6 +39,7 @@ class ChatBubble(MaterialCard):
             **kwargs,
         )
         self.bind(minimum_height=self.setter("height"))
+
         title = Label(
             text="Вы" if user else "Ассистент",
             color=TEXT_PRIMARY if user else TEXT_MUTED,
@@ -50,6 +51,7 @@ class ChatBubble(MaterialCard):
         )
         bind_text_size(title)
         bind_auto_height(title, min_height=dp(18), extra=dp(2))
+
         body = Label(
             text=text,
             color=TEXT_PRIMARY,
@@ -60,6 +62,7 @@ class ChatBubble(MaterialCard):
         )
         bind_text_size(body)
         bind_auto_height(body, min_height=dp(20), extra=dp(2))
+
         self.add_widget(title)
         self.add_widget(body)
 
@@ -78,7 +81,7 @@ class ChatModal(ModalView):
         self.history = []
         self._busy = False
         self._build_ui()
-        self._append_message("assistant", "Что нужно сделать с задачами?")
+        self._append_message("assistant", "Что нужно запланировать?")
 
     def _build_ui(self):
         root = MaterialCard(
@@ -108,7 +111,7 @@ class ChatModal(ModalView):
         root.add_widget(self.status)
 
         composer = BoxLayout(size_hint_y=None, height=dp(46), spacing=dp(8))
-        self.input = MaterialTextInput(multiline=False, hint_text="Введите запрос", height=dp(46))
+        self.input = MaterialTextInput(multiline=False, hint_text="Что нужно запланировать?", height=dp(46))
         self.input.bind(on_text_validate=lambda *_: self.send_message())
         self.send_btn = FilledButton(text="Отправить", height=dp(46), size_hint_x=None, width=dp(108))
         self.send_btn.bind(on_release=lambda *_: self.send_message())
@@ -136,7 +139,13 @@ class ChatModal(ModalView):
             Clock.schedule_once(lambda *_: self._on_error(), 0)
 
     def _on_reply(self, reply):
-        self._append_message("assistant", reply.answer, buttons=reply.ui_hints.get("buttons", []))
+        self._append_message(
+            "assistant",
+            reply.answer,
+            buttons=reply.ui_hints.get("buttons", []),
+            draft=reply.ui_hints.get("draft", {}),
+            status=reply.ui_hints.get("status", {}),
+        )
         self._set_busy(False, "")
         if reply.should_refresh and self.on_tasks_changed:
             self.on_tasks_changed()
@@ -151,7 +160,7 @@ class ChatModal(ModalView):
         self.send_btn.disabled = busy
         self.status.text = message
 
-    def _append_message(self, role, text, buttons=None):
+    def _append_message(self, role, text, buttons=None, draft=None, status=None):
         self.history.append({"role": role, "content": text})
         row = BoxLayout(size_hint_y=None)
         row.bind(minimum_height=row.setter("height"))
@@ -159,6 +168,10 @@ class ChatModal(ModalView):
             bubble_box = BoxLayout(orientation="vertical", size_hint=(0.9, None), spacing=dp(6))
             bubble_box.bind(minimum_height=bubble_box.setter("height"))
             bubble_box.add_widget(ChatBubble(role=role, text=text))
+            if draft:
+                bubble_box.add_widget(self._build_draft_card(draft))
+            if status:
+                bubble_box.add_widget(self._build_status_line(status))
             if buttons:
                 for data in buttons:
                     btn = MaterialButton(text=data["label"], height=dp(36), font_size=FONT_SIZE)
@@ -171,6 +184,59 @@ class ChatModal(ModalView):
             row.add_widget(ChatBubble(role=role, text=text))
         self.messages.add_widget(row)
         Clock.schedule_once(self._scroll_bottom, 0.05)
+
+    def _build_draft_card(self, draft):
+        card = MaterialCard(
+            orientation="vertical",
+            spacing=dp(4),
+            padding=(dp(10), dp(8), dp(10), dp(8)),
+            size_hint_y=None,
+            fill_color=POPUP_SURFACE,
+            border_color=INPUT_FILL,
+        )
+        card.bind(minimum_height=card.setter("height"))
+
+        title = Label(
+            text="Предпросмотр",
+            color=TEXT_PRIMARY,
+            size_hint_y=None,
+            font_size=FONT_SIZE,
+            bold=True,
+            halign="left",
+            valign="middle",
+        )
+        bind_text_size(title)
+        bind_auto_height(title, min_height=dp(18), extra=dp(2))
+        card.add_widget(title)
+
+        for key, value in draft.items():
+            line = Label(
+                text=f"{key}: {value or '-'}",
+                color=TEXT_PRIMARY,
+                size_hint_y=None,
+                font_size=FONT_SIZE,
+                halign="left",
+                valign="middle",
+            )
+            bind_text_size(line)
+            bind_auto_height(line, min_height=dp(18), extra=dp(2))
+            card.add_widget(line)
+        return card
+
+    def _build_status_line(self, status):
+        parts = [status.get("mode", ""), status.get("step", ""), status.get("waiting", "")]
+        text = " | ".join([item for item in parts if item])
+        label = Label(
+            text=text,
+            color=TEXT_MUTED,
+            size_hint_y=None,
+            font_size=FONT_SIZE,
+            halign="left",
+            valign="middle",
+        )
+        bind_text_size(label)
+        bind_auto_height(label, min_height=dp(16), extra=dp(2))
+        return label
 
     def _scroll_bottom(self, *_):
         self.scroll.scroll_y = 0

@@ -228,7 +228,7 @@ class TaskCommandDispatcher:
             elif missing_field == "time_choice":
                 buttons.extend(
                     [
-                        {"label": "Указать время", "message": "/set_time"},
+                        {"label": "Поменять время", "message": "/set_time"},
                         {"label": "Без времени", "message": "/skip_time"},
                     ]
                 )
@@ -554,43 +554,43 @@ class TaskAIAgent:
             )
 
 
-        if "???????" in lowered and "???????" in lowered:
-            return AgentCommand("get_statistics", {}, "?????? ???????? ???????????? ????.")
+        if "сколько" in lowered and ("просроч" in lowered or "статист" in lowered):
+            return AgentCommand("get_statistics", {}, "Сейчас покажу статистику по задачам.")
 
-        if any(word in lowered for word in ("??????", "??????", "?????", "??????")):
+        if any(word in lowered for word in ("покажи", "показать", "список", "задачи")):
             filters: dict[str, Any] = {}
             category = self._infer_category(lowered)
-            if category != "??????" or "??????" in lowered:
+            if category != "другое" or "другое" in lowered:
                 filters["category"] = category
             date_context = parse_relative_datetime(lowered, datetime.now())
             if date_context.start_date:
                 filters["start_date"] = date_context.start_date.isoformat()
             if date_context.end_date:
                 filters["end_date"] = date_context.end_date.isoformat()
-            if "???????" in lowered:
-                filters["status"] = "??????????"
-            if "???" in lowered and "???????" not in lowered:
+            if "просроч" in lowered:
+                filters["status"] = "просрочена"
+            if ("актив" in lowered or "текущ" in lowered) and "просроч" not in lowered:
                 filters["view"] = "actual"
-            return AgentCommand("list_tasks", filters, "?????? ?????? ?????????? ??????.")
+            return AgentCommand("list_tasks", filters, "Сейчас покажу подходящие задачи.")
 
-        if any(word in lowered for word in ("??????", "???????", "????????", "???????????", "???????????", "?????????")):
+        if any(word in lowered for word in ("выполни", "выполнен", "заверш", "закрой", "отметь")):
             title_query = self._extract_title_query_for_action(text)
             if not title_query:
-                return AgentCommand("mark_as_done", {"title_query": ""}, "?????? ?????? ???????? ??????.")
-            return AgentCommand("mark_as_done", {"title_query": title_query}, "??????? ?????? ??? ???????????.")
+                return AgentCommand("mark_as_done", {"title_query": ""}, "Какую задачу отметить выполненной?")
+            return AgentCommand("mark_as_done", {"title_query": title_query}, "Сейчас отмечу задачу как выполненную.")
 
-        if any(word in lowered for word in ("?????", "???????", "?????")):
+        if any(word in lowered for word in ("удали", "удалить", "убери")):
             title_query = self._extract_title_query_for_action(text)
             if not title_query:
-                return AgentCommand("delete_task", {"title_query": ""}, "?????? ?????? ??????? ??????.")
-            return AgentCommand("delete_task", {"title_query": title_query}, "?????? ????? ??????.")
+                return AgentCommand("delete_task", {"title_query": ""}, "Какую задачу нужно удалить?")
+            return AgentCommand("delete_task", {"title_query": title_query}, "Сейчас удалю эту задачу.")
 
-        if any(word in lowered for word in ("??????", "???????", "??????", "????????", "???????", "??????????")):
+        if any(word in lowered for word in ("измени", "изменить", "обнови", "поменяй", "перенеси", "перенести")):
             return self._heuristic_update_command(text, lowered)
 
         explicit_create = any(
             word in lowered
-            for word in ("??????", "????????", "??????", "????????", "??????", "???????", "???????", "?????????")
+            for word in ("добавь", "добавить", "создай", "создать", "запиши", "записать", "напомни", "напомнить")
         )
         if explicit_create or self._looks_like_implicit_task(lowered):
             parsed = parse_relative_datetime(lowered, datetime.now())
@@ -606,21 +606,21 @@ class TaskAIAgent:
             if (
                 not explicit_create
                 and parsed.due_at is None
-                and not any(word in lowered for word in ("??????", "?????????", "???????????", "??????????"))
+                and not any(word in lowered for word in ("надо", "нужно", "не забыть", "напомни"))
             ):
-                return AgentCommand("clarify", {"missing_field": "due_date"}, "?? ?? ????? ????? ????, ?????? ??????????.")
+                return AgentCommand("clarify", {"missing_field": "due_date"}, "Не понял, когда поставить задачу. Уточни дату.")
 
             category = self._infer_category(lowered)
             title = self._infer_title(text, category)
             recurrence = self._infer_recurrence(lowered)
-            priority = 3 if category == "???????" else 2
+            priority = 3 if category == "платежи" else 2
             description = self._infer_description(text)
             due_at = parsed.due_at
             if recurrence and due_at is None:
                 due_at = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0)
             due_date = due_at.strftime("%Y-%m-%d %H:%M") if due_at else ""
 
-            if title.lower() in {"??????", "????? ??????", "?????? ??????"}:
+            if title.lower() in {"задача", "новая задача", "добавь задачу"}:
                 return AgentCommand(
                     "clarify",
                     {
@@ -634,7 +634,7 @@ class TaskAIAgent:
                             "priority": priority,
                         },
                     },
-                    "??? ??????? ???????",
+                    "Как назвать задачу?",
                 )
 
             payload = {
@@ -649,7 +649,7 @@ class TaskAIAgent:
                 return AgentCommand(
                     "create_task",
                     payload,
-                    f"????? ?????? ?{title}?.",
+                    f"Понял задачу «{title}».",
                 )
             return AgentCommand(
                 "clarify",
@@ -658,7 +658,7 @@ class TaskAIAgent:
                     "pending_action": "create_task",
                     "payload": payload,
                 },
-                f"????? ?????? ?{title}?. ????????? ???? ? ????? ??? ???????? ??? ?????",
+                f"Понял задачу «{title}». Добавить срок или оставить без даты?",
             )
 
         return self._sanitize_agent_command(
@@ -1078,6 +1078,19 @@ class TaskAIAgent:
         if self.pending_resolution["action"] == "create_task" and self.pending_resolution.get("missing_field") == "time_choice":
             payload = dict(self.pending_resolution.get("payload", {}))
             normalized = message.strip().lower()
+            if normalized in {"/quick_add", "/add_task", "/confirm_create", "добавить", "добавить задачу", "да"}:
+                payload["priority"] = int(payload.get("priority", 2) or 2)
+                self.pending_resolution = None
+                reply = self.dispatcher.dispatch(AgentCommand(action="create_task", data=payload))
+                self._remember_pending_resolution(reply)
+                return reply
+            chosen_priority = self._parse_priority_from_text(message)
+            if chosen_priority is not None:
+                payload["priority"] = chosen_priority
+                self.pending_resolution = None
+                reply = self.dispatcher.dispatch(AgentCommand(action="create_task", data=payload))
+                self._remember_pending_resolution(reply)
+                return reply
             if normalized in {"/skip_time", "без времени", "оставить без времени"}:
                 if payload.get("due_date"):
                     payload["due_date"] = self._normalize_due_without_time(payload["due_date"])
@@ -1085,7 +1098,7 @@ class TaskAIAgent:
                 reply = self._build_priority_reply(payload)
                 self._remember_pending_resolution(reply)
                 return reply
-            if normalized in {"/set_time", "указать время", "добавить время"}:
+            if normalized in {"/set_time", "указать время", "добавить время", "поменять время"}:
                 self.pending_resolution = None
                 reply = AssistantReply(
                     action="clarify",
@@ -1414,6 +1427,21 @@ class TaskAIAgent:
             return self._reply_for_create_step(error_text="Не до конца понял дату. Напиши, например: завтра, послезавтра в 18:00 или через неделю.")
 
         if step == "time_choice":
+            if normalized in {"/quick_add", "/add_task", "/confirm_create", "добавить", "добавить задачу", "да"}:
+                draft["priority"] = int(draft.get("priority", 2) or 2)
+                payload = dict(draft)
+                self.wizard_state = None
+                reply = self.dispatcher.dispatch(AgentCommand(action="create_task", data=payload))
+                self._remember_pending_resolution(reply)
+                return reply
+            chosen_priority = self._parse_priority_from_text(message)
+            if chosen_priority is not None:
+                draft["priority"] = chosen_priority
+                payload = dict(draft)
+                self.wizard_state = None
+                reply = self.dispatcher.dispatch(AgentCommand(action="create_task", data=payload))
+                self._remember_pending_resolution(reply)
+                return reply
             if normalized in {"/skip_time", "без времени", "оставить без времени"}:
                 if draft.get("due_date"):
                     draft["due_date"] = self._normalize_due_without_time(draft["due_date"])
@@ -1782,10 +1810,11 @@ class TaskAIAgent:
                 "missing_field": "due_date_choice",
                 "payload": payload,
             },
-            answer=f"Задачу «{payload.get('title', 'Новая задача')}» записал. Поставить дату и время или оставить без даты?",
+            answer=f"Я понял задачу «{payload.get('title', 'Новая задача')}». Добавить срок или выбрать «Без даты»?",
             should_refresh=False,
         )
         reply.ui_hints = self.dispatcher._build_ui_hints(reply)
+        reply.ui_hints["draft"] = self._format_draft_preview(payload)
         return reply
 
     def _build_time_choice_reply(self, payload: dict[str, Any]) -> AssistantReply:
@@ -1796,10 +1825,17 @@ class TaskAIAgent:
                 "missing_field": "time_choice",
                 "payload": payload,
             },
-            answer="Добавить точное время или оставить без времени?",
+            answer="Почти готово. Добавить задачу с таким временем или поменять его?",
             should_refresh=False,
         )
         reply.ui_hints = self.dispatcher._build_ui_hints(reply)
+        reply.ui_hints["draft"] = self._format_draft_preview(payload)
+        reply.ui_hints["buttons"] = [
+            {"label": "Добавить", "message": "/quick_add"},
+            {"label": "Поменять время", "message": "/set_time"},
+            {"label": "Без времени", "message": "/skip_time"},
+            {"label": "Высокий приоритет", "message": "/priority_3"},
+        ]
         return reply
 
     def _build_priority_reply(self, payload: dict[str, Any]) -> AssistantReply:
@@ -1810,10 +1846,11 @@ class TaskAIAgent:
                 "missing_field": "priority",
                 "payload": payload,
             },
-            answer="Выбери приоритет задачи.",
+            answer="Выбери приоритет, и я сразу добавлю задачу.",
             should_refresh=False,
         )
         reply.ui_hints = self.dispatcher._build_ui_hints(reply)
+        reply.ui_hints["draft"] = self._format_draft_preview(payload)
         return reply
 
     @staticmethod

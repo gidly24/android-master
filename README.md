@@ -111,3 +111,21 @@ pip install -r requirements.txt
 - Названия классов и переменных оставлены на английском.
 - Данные хранятся только локально.
 - Файл `tasks.db` не добавляется в Git, поэтому при первом запуске на новом компьютере тестовые задачи создадутся автоматически.
+## NLU Evaluation Pipeline
+
+Use these commands to run the local NLU regression loop:
+
+```bash
+python scripts/generate_nlu_dataset.py
+python scripts/split_nlu_dataset.py
+pytest tests/test_nlu_golden.py -q
+python scripts/eval_nlu.py
+```
+
+Artifacts:
+
+- `data/nlu_golden.jsonl`: hand-crafted critical scenarios.
+- `data/nlu_synthetic.jsonl`: generated scenarios.
+- `data/nlu_train.jsonl`: 80% split for iterative tuning/few-shot experiments.
+- `data/nlu_validation.jsonl`: 20% holdout for quality checks.
+- `reports/nlu_errors.jsonl`: failed validation cases with expected vs actual payloads.
