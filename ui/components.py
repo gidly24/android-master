@@ -1,250 +1,318 @@
+from pathlib import Path
+
+from kivy.clock import Clock
+from kivy.graphics import Color, RoundedRectangle, Rectangle
 from kivy.metrics import dp
-from kivy.properties import BooleanProperty, ListProperty
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
+from kivy.uix.image import Image
 from kivy.uix.label import Label
-from kivy.uix.spinner import Spinner
+from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.textinput import TextInput
-from kivy.uix.togglebutton import ToggleButton
-from kivy.uix.widget import Widget
-from kivy.graphics import Color, Rectangle
 
 
-# Dark theme colors
-BG_PRIMARY = (0.12, 0.12, 0.12, 1)
-BG_SECONDARY = (0.18, 0.18, 0.18, 1)
-BG_TERTIARY = (0.22, 0.22, 0.22, 1)
+_ROBOTO_BOLD_PATH = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "Roboto-Bold.ttf"
+FONT_NAME = str(_ROBOTO_BOLD_PATH) if _ROBOTO_BOLD_PATH.exists() else "Roboto"
+FONT_SIZE = "16sp"
+APP_BACKGROUND = (0.1333333333, 0.1411764706, 0.1647058824, 1)  # #22242A
+POPUP_SURFACE = (0.1529411765, 0.1607843137, 0.1882352941, 1)  # #272930
+INPUT_FILL = (0.2117647059, 0.2196078431, 0.2509803922, 1)  # #363840
+TEXT_PRIMARY = (0.8392156863, 0.8470588235, 0.8784313725, 1)  # #D6D8E0
+TEXT_SECONDARY = TEXT_PRIMARY
+TEXT_MUTED = TEXT_PRIMARY
+M3_PRIMARY = (0.0509803922, 0.3960784314, 0.8509803922, 1)  # #0D65D9
+M3_SURFACE = APP_BACKGROUND
+M3_SURFACE_VARIANT = POPUP_SURFACE
+M3_OUTLINE = INPUT_FILL
+SPINNER_FILL = INPUT_FILL
+TRANSPARENT_APP = (APP_BACKGROUND[0], APP_BACKGROUND[1], APP_BACKGROUND[2], 0)
 
-TEXT_PRIMARY = (0.95, 0.95, 0.95, 1)
-TEXT_SECONDARY = (0.75, 0.75, 0.75, 1)
-TEXT_MUTED = (0.55, 0.55, 0.55, 1)
+CARD_ACTIVE_FILL = POPUP_SURFACE
+CARD_ACTIVE_BORDER = POPUP_SURFACE
+CARD_DONE_FILL = POPUP_SURFACE
+CARD_DONE_BORDER = POPUP_SURFACE
+CARD_OVERDUE_FILL = POPUP_SURFACE
+CARD_OVERDUE_BORDER = POPUP_SURFACE
 
-SURFACE_FILL = (0.18, 0.18, 0.18, 1)
-SURFACE_BORDER = (0.3, 0.3, 0.3, 1)
 
-INPUT_FILL = (0.15, 0.15, 0.15, 1)
-INPUT_BORDER = (0.25, 0.25, 0.25, 1)
-
-PRIMARY_FILL = (0.85, 0.45, 0.15, 1)
-PRIMARY_BORDER = (0.85, 0.45, 0.15, 1)
-SUCCESS_FILL = (0.35, 0.65, 0.45, 1)
-SUCCESS_BORDER = (0.35, 0.65, 0.45, 1)
-DANGER_FILL = (0.75, 0.35, 0.35, 1)
-DANGER_BORDER = (0.75, 0.35, 0.35, 1)
-
-CARD_ACTIVE_FILL = (0.2, 0.2, 0.2, 1)
-CARD_ACTIVE_BORDER = (0.85, 0.45, 0.15, 1)
-CARD_DONE_FILL = (0.18, 0.18, 0.18, 1)
-CARD_DONE_BORDER = (0.45, 0.45, 0.45, 1)
-CARD_OVERDUE_FILL = (0.18, 0.18, 0.18, 1)
-CARD_OVERDUE_BORDER = (0.75, 0.35, 0.35, 1)
-
-FONT_SIZE = "14sp"
+def _capsule_radius(size, fallback_radius=None):
+    max_radius = max(min(size[0], size[1]) / 2, 0)
+    if fallback_radius is None:
+        return max_radius
+    return min(fallback_radius, max_radius)
 
 
 def bind_text_size(label, horizontal_padding=0):
-    """Bind label width to text wrapping width."""
     def update_text_size(*_):
         width = max(label.width - horizontal_padding, dp(10))
         label.text_size = (width, None)
+
     label.bind(width=update_text_size)
-    update_text_size()
+    Clock.schedule_once(update_text_size, 0)
     return label
 
 
 def bind_auto_height(label, min_height=dp(24), extra=dp(6)):
-    """Resize a label height based on rendered text."""
     def update_height(*_):
         label.height = max(min_height, label.texture_size[1] + extra)
+
     label.bind(texture_size=update_height, text=update_height)
-    update_height()
+    Clock.schedule_once(update_height, 0)
     return label
 
 
-class GlassRoot(BoxLayout):
-    """Dark application root."""
+class MaterialRoot(BoxLayout):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         with self.canvas.before:
-            Color(*BG_PRIMARY)
-            self.bg_rect = Rectangle()
-        self.bind(pos=self._update_bg, size=self._update_bg)
+            self._bg = Color(*APP_BACKGROUND)
+            self._rect = Rectangle()
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+        Clock.schedule_once(self._update_canvas, 0)
 
-    def _update_bg(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
+    def _update_canvas(self, *_):
+        self._rect.pos = self.pos
+        self._rect.size = self.size
 
 
-class GlassPane(BoxLayout):
-    """Dark panel with border."""
-    def __init__(self, fill_color=SURFACE_FILL, border_color=SURFACE_BORDER, shadow_color=None, radius=None, **kwargs):
+class MaterialCard(BoxLayout):
+    def __init__(self, fill_color=M3_SURFACE, border_color=M3_OUTLINE, radius=dp(24), **kwargs):
         super().__init__(**kwargs)
+        self.fill_color = fill_color
+        self.border_color = border_color
+        self.radius = radius
         with self.canvas.before:
-            Color(*fill_color)
-            self.bg_rect = Rectangle(size=self.size, pos=self.pos)
-        with self.canvas.after:
-            Color(*border_color)
-            self.border_rect = Rectangle()
-        self.bind(pos=self._update, size=self._update)
+            self._fill = Color(*self.fill_color)
+            self._rect = RoundedRectangle(radius=[0])
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+        Clock.schedule_once(self._update_canvas, 0)
 
-    def _update(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
-        self.border_rect.pos = (self.x, self.y)
-        self.border_rect.size = (self.width, 1)
+    def set_palette(self, fill_color=None, border_color=None):
+        if fill_color is not None:
+            self.fill_color = fill_color
+        if border_color is not None:
+            self.border_color = border_color
+        self._update_canvas()
+
+    def _update_canvas(self, *_):
+        self._fill.rgba = self.fill_color
+        self._rect.pos = self.pos
+        self._rect.size = self.size
+        self._rect.radius = [_capsule_radius(self.size, self.radius)]
 
 
-class GlassButton(Button):
-    """Dark button."""
-    def __init__(self, fill_color=BG_TERTIARY, border_color=None, text_color=TEXT_PRIMARY, shadow_color=None, radius=None, **kwargs):
-        kwargs.setdefault("background_color", (0, 0, 0, 0))
-        kwargs.setdefault("color", text_color)
+class MaterialButton(Button):
+    def __init__(
+        self,
+        fill_color=M3_PRIMARY,
+        border_color=M3_PRIMARY,
+        text_color=TEXT_PRIMARY,
+        radius=None,
+        **kwargs,
+    ):
+        kwargs.setdefault("background_normal", "")
+        kwargs.setdefault("background_down", "")
+        kwargs.setdefault("background_color", TRANSPARENT_APP)
+        kwargs.setdefault("font_name", FONT_NAME)
         kwargs.setdefault("font_size", FONT_SIZE)
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(42))
+        kwargs.setdefault("bold", True)
+        kwargs.setdefault("color", text_color)
         super().__init__(**kwargs)
-
         self.fill_color = fill_color
+        self.border_color = border_color
         self.text_color = text_color
+        self.radius = radius
         with self.canvas.before:
-            Color(*fill_color)
-            self.bg_rect = Rectangle()
-        self.bind(pos=self._update, size=self._update)
-
-    def _update(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
+            self._fill = Color(*self.fill_color)
+            self._rect = RoundedRectangle(radius=[0])
+        self.bind(pos=self._update_canvas, size=self._update_canvas, state=self._update_state)
+        Clock.schedule_once(self._update_canvas, 0)
 
     def set_palette(self, fill_color=None, border_color=None, text_color=None):
         if fill_color is not None:
             self.fill_color = fill_color
+        if border_color is not None:
+            self.border_color = border_color
         if text_color is not None:
+            self.text_color = text_color
             self.color = text_color
+        self._update_canvas()
 
-
-class PrimaryGlassButton(GlassButton):
-    def __init__(self, **kwargs):
-        kwargs.setdefault("fill_color", PRIMARY_FILL)
-        kwargs.setdefault("text_color", (1, 1, 1, 1))
-        super().__init__(**kwargs)
-
-
-class SuccessGlassButton(GlassButton):
-    def __init__(self, **kwargs):
-        kwargs.setdefault("fill_color", SUCCESS_FILL)
-        kwargs.setdefault("text_color", (1, 1, 1, 1))
-        super().__init__(**kwargs)
-
-
-class DangerGlassButton(GlassButton):
-    def __init__(self, **kwargs):
-        kwargs.setdefault("fill_color", DANGER_FILL)
-        kwargs.setdefault("text_color", (1, 1, 1, 1))
-        super().__init__(**kwargs)
-
-
-class CheckIconButton(SuccessGlassButton):
-    """Simple circular button for marking tasks done."""
-    def __init__(self, **kwargs):
-        kwargs.setdefault("text", "✓")
-        kwargs.setdefault("size_hint", (None, None))
-        kwargs.setdefault("width", dp(42))
-        kwargs.setdefault("height", dp(42))
-        super().__init__(**kwargs)
-
-    def set_selected(self, selected):
-        if selected:
-            self.fill_color = (0.25, 0.55, 0.35, 1)
+    def _update_state(self, *_):
+        if self.state == "down":
+            self._fill.rgba = POPUP_SURFACE
         else:
-            self.fill_color = SUCCESS_FILL
+            self._fill.rgba = self.fill_color
+
+    def _update_canvas(self, *_):
+        self._update_state()
+        self.color = self.text_color
+        self._rect.pos = self.pos
+        self._rect.size = self.size
+        self._rect.radius = [_capsule_radius(self.size, self.radius)]
 
 
-class IOSSwitch(ToggleButton):
-    """Simple toggle button for dark theme."""
+class FilledButton(MaterialButton):
     def __init__(self, **kwargs):
-        kwargs.setdefault("size_hint", (None, None))
-        kwargs.setdefault("size", (dp(60), dp(32)))
-        kwargs.setdefault("background_normal", "")
-        kwargs.setdefault("background_down", "")
-        kwargs.setdefault("background_color", BG_TERTIARY)
-        kwargs.setdefault("color", TEXT_PRIMARY)
+        kwargs.setdefault("fill_color", M3_PRIMARY)
+        kwargs.setdefault("border_color", M3_PRIMARY)
+        kwargs.setdefault("text_color", TEXT_PRIMARY)
         super().__init__(**kwargs)
-        self.active = False
 
 
-class GlassTextInput(TextInput):
-    """Dark text input."""
-    def __init__(self, radius=None, **kwargs):
+class DangerButton(MaterialButton):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("fill_color", M3_PRIMARY)
+        kwargs.setdefault("border_color", M3_PRIMARY)
+        kwargs.setdefault("text_color", TEXT_PRIMARY)
+        super().__init__(**kwargs)
+
+
+class MaterialTextInput(TextInput):
+    def __init__(self, radius=dp(24), **kwargs):
         kwargs.setdefault("background_normal", "")
         kwargs.setdefault("background_active", "")
-        kwargs.setdefault("background_color", INPUT_FILL)
+        kwargs.setdefault("background_color", TRANSPARENT_APP)
         kwargs.setdefault("foreground_color", TEXT_PRIMARY)
+        kwargs.setdefault("disabled_foreground_color", TEXT_PRIMARY)
+        kwargs.setdefault("cursor_color", M3_PRIMARY)
+        kwargs.setdefault("selection_color", (M3_PRIMARY[0], M3_PRIMARY[1], M3_PRIMARY[2], 0.35))
+        kwargs.setdefault("cursor_width", dp(1.8))
+        kwargs.setdefault("cursor_blink", True)
         kwargs.setdefault("hint_text_color", TEXT_MUTED)
+        kwargs.setdefault("font_name", FONT_NAME)
+        kwargs.setdefault("padding", [dp(12), dp(12), dp(12), dp(12)])
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(46))
         kwargs.setdefault("font_size", FONT_SIZE)
         super().__init__(**kwargs)
-
-        with self.canvas.after:
-            Color(*INPUT_BORDER)
-            self.border_rect = Rectangle()
-        self.bind(pos=self._update, size=self._update)
-
-    def _update(self, *args):
-        self.border_rect.pos = (self.x, self.y)
-        self.border_rect.size = (self.width, 1)
-
-
-class GlassSpinner(Spinner):
-    """Dark spinner."""
-    def __init__(self, radius=None, **kwargs):
-        kwargs.setdefault("background_normal", "")
-        kwargs.setdefault("background_color", INPUT_FILL)
-        kwargs.setdefault("color", TEXT_PRIMARY)
-        kwargs.setdefault("font_size", FONT_SIZE)
-        kwargs.setdefault("size_hint_y", None)
-        kwargs.setdefault("height", dp(46))
-        super().__init__(**kwargs)
-
-        with self.canvas.after:
-            Color(*INPUT_BORDER)
-            self.border_rect = Rectangle()
-        self.bind(pos=self._update, size=self._update)
-
-    def _update(self, *args):
-        self.border_rect.pos = (self.x, self.y)
-        self.border_rect.size = (self.width, 1)
-
-
-class SectionTitle(Label):
-    """Section heading."""
-    def __init__(self, **kwargs):
-        kwargs.setdefault("color", TEXT_PRIMARY)
-        kwargs.setdefault("font_size", FONT_SIZE)
-        kwargs.setdefault("bold", True)
-        kwargs.setdefault("size_hint_y", None)
-        kwargs.setdefault("height", dp(34))
-        kwargs.setdefault("halign", "left")
-        kwargs.setdefault("valign", "middle")
-        super().__init__(**kwargs)
-
-
-class BadgeLabel(Label):
-    """Badge for status/category."""
-    def __init__(self, fill_color=BG_TERTIARY, border_color=None, text_color=TEXT_PRIMARY, radius=None, **kwargs):
-        kwargs.setdefault("color", text_color)
-        kwargs.setdefault("size_hint", (None, None))
-        kwargs.setdefault("height", dp(28))
-        kwargs.setdefault("font_size", FONT_SIZE)
-        kwargs.setdefault("bold", True)
-        super().__init__(**kwargs)
-
-        self.text_color = text_color
+        self.radius = radius
         with self.canvas.before:
-            Color(*fill_color)
-            self.bg_rect = Rectangle()
-        self.bind(pos=self._update, size=self._update)
+            self._fill = Color(*INPUT_FILL)
+            self._rect = RoundedRectangle(radius=[0])
+            # Reset color context so text/caret rendering stays visible.
+            self._text_pass = Color(*self.foreground_color)
+        self.bind(pos=self._update_canvas, size=self._update_canvas, focus=self._update_canvas)
+        Clock.schedule_once(self._update_canvas, 0)
 
-    def _update(self, *args):
-        self.bg_rect.pos = self.pos
-        self.bg_rect.size = self.size
+    def _update_canvas(self, *_):
+        self._rect.pos = self.pos
+        self._rect.size = self.size
+        self._rect.radius = [_capsule_radius(self.size, self.radius)]
+        self._text_pass.rgba = self.foreground_color
+
+
+class SpinnerOptionMaterial(SpinnerOption):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("background_normal", "")
+        kwargs.setdefault("background_color", POPUP_SURFACE)
+        kwargs.setdefault("color", TEXT_PRIMARY)
+        kwargs.setdefault("font_name", FONT_NAME)
+        kwargs.setdefault("font_size", FONT_SIZE)
+        kwargs.setdefault("bold", True)
+        super().__init__(**kwargs)
+
+
+class MaterialSpinner(Spinner):
+    def __init__(self, radius=dp(24), **kwargs):
+        kwargs.setdefault("background_normal", "")
+        kwargs.setdefault("background_color", TRANSPARENT_APP)
+        kwargs.setdefault("font_name", FONT_NAME)
+        kwargs.setdefault("font_size", FONT_SIZE)
+        kwargs.setdefault("color", TEXT_PRIMARY)
+        kwargs.setdefault("bold", True)
+        kwargs.setdefault("size_hint_y", None)
+        kwargs.setdefault("height", dp(46))
+        kwargs.setdefault("option_cls", SpinnerOptionMaterial)
+        super().__init__(**kwargs)
+        self.radius = radius
+        with self.canvas.before:
+            self._fill = Color(*SPINNER_FILL)
+            self._rect = RoundedRectangle(radius=[0])
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+        Clock.schedule_once(self._update_canvas, 0)
+
+    def _update_canvas(self, *_):
+        self._rect.pos = self.pos
+        self._rect.size = self.size
+        self._rect.radius = [_capsule_radius(self.size, self.radius)]
+
+
+class Chip(Label):
+    def __init__(self, fill_color=M3_SURFACE_VARIANT, border_color=M3_OUTLINE, text_color=TEXT_SECONDARY, **kwargs):
+        kwargs.setdefault("size_hint", (None, None))
+        kwargs.setdefault("height", dp(26))
+        kwargs.setdefault("font_name", FONT_NAME)
+        kwargs.setdefault("font_size", FONT_SIZE)
+        kwargs.setdefault("bold", True)
+        kwargs.setdefault("color", text_color)
+        super().__init__(**kwargs)
+        self.fill_color = fill_color
+        self.border_color = border_color
+        self.radius = dp(20)
+        with self.canvas.before:
+            self._fill = Color(*self.fill_color)
+            self._rect = RoundedRectangle(radius=[0])
+        self.bind(texture_size=self._update_size, text=self._update_size, pos=self._update_canvas, size=self._update_canvas)
+        Clock.schedule_once(self._update_size, 0)
+
+    def _update_size(self, *_):
+        self.width = max(dp(70), self.texture_size[0] + dp(20))
+        self._update_canvas()
+
+    def _update_canvas(self, *_):
+        self._rect.pos = self.pos
+        self._rect.size = self.size
+        self._rect.radius = [_capsule_radius(self.size, self.radius)]
+
+
+class CircleButton(MaterialButton):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("size_hint", (None, None))
+        kwargs.setdefault("width", dp(52))
+        kwargs.setdefault("height", dp(52))
+        kwargs.setdefault("radius", dp(26))
+        kwargs.setdefault("font_size", FONT_SIZE)
+        kwargs.setdefault("bold", True)
+        super().__init__(**kwargs)
+
+
+class IconCircleButton(CircleButton):
+    def __init__(self, icon_source=None, fallback_text="", **kwargs):
+        kwargs.setdefault("text", fallback_text)
+        super().__init__(**kwargs)
+        self._icon = None
+        if icon_source:
+            path = Path(icon_source)
+            if path.exists():
+                self.text = ""
+                self._icon = Image(source=str(path))
+                if hasattr(self._icon, "fit_mode"):
+                    self._icon.fit_mode = "contain"
+                self.add_widget(self._icon)
+                self.bind(pos=self._update_icon, size=self._update_icon)
+                Clock.schedule_once(self._update_icon, 0)
+
+    def _update_icon(self, *_):
+        if self._icon is None:
+            return
+        pad = dp(7)
+        max_icon = min(self.width - pad * 2, self.height - pad * 2)
+        base_side = max(max_icon * 0.7, dp(8))
+        icon_side = min(base_side * 1.25, max_icon)
+        self._icon.size = (icon_side, icon_side)
+        self._icon.pos = (
+            self.x + (self.width - icon_side) / 2,
+            self.y + (self.height - icon_side) / 2,
+        )
+
+
+class MaterialLabel(Label):
+    def __init__(self, **kwargs):
+        kwargs.setdefault("font_name", FONT_NAME)
+        kwargs.setdefault("font_size", FONT_SIZE)
+        kwargs.setdefault("bold", True)
+        kwargs.setdefault("color", TEXT_PRIMARY)
+        super().__init__(**kwargs)
