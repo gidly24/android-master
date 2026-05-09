@@ -111,21 +111,83 @@ pip install -r requirements.txt
 - Названия классов и переменных оставлены на английском.
 - Данные хранятся только локально.
 - Файл `tasks.db` не добавляется в Git, поэтому при первом запуске на новом компьютере тестовые задачи создадутся автоматически.
-## NLU Evaluation Pipeline
+## NLU (MASSIVE ru-RU)
 
-Use these commands to run the local NLU regression loop:
+Install NLU dependencies:
 
 ```bash
-python scripts/generate_nlu_dataset.py
-python scripts/split_nlu_dataset.py
-pytest tests/test_nlu_golden.py -q
-python scripts/eval_nlu.py
+python -m pip install -r requirements-nlu.txt
 ```
 
-Artifacts:
+Prepare dataset:
 
-- `data/nlu_golden.jsonl`: hand-crafted critical scenarios.
-- `data/nlu_synthetic.jsonl`: generated scenarios.
-- `data/nlu_train.jsonl`: 80% split for iterative tuning/few-shot experiments.
-- `data/nlu_validation.jsonl`: 20% holdout for quality checks.
-- `reports/nlu_errors.jsonl`: failed validation cases with expected vs actual payloads.
+```bash
+python scripts/prepare_massive_ru.py --config ru-RU
+```
+
+Train baseline intent model:
+
+```bash
+python scripts/train_intent_model.py
+```
+
+Evaluate on test split:
+
+```bash
+python scripts/eval_intent_model.py
+```
+
+Generate local action dataset:
+
+```bash
+python scripts/generate_action_router_dataset.py
+```
+
+Train local action router:
+
+```bash
+python scripts/train_action_router.py
+```
+
+Evaluate local action router:
+
+```bash
+python scripts/eval_action_router.py
+```
+
+Check active LLM model for app answers:
+
+```bash
+python scripts/show_active_llm.py
+```
+
+Main artifacts:
+
+- `data/nlu_train.jsonl`
+- `data/nlu_validation.jsonl`
+- `data/nlu_test.jsonl`
+- `data/nlu_metadata.jsonl`
+- `models/intent_model.joblib`
+- `reports/train_report.txt`
+- `reports/eval_report.txt`
+- `reports/eval_errors.jsonl`
+- `data/action_router_train.jsonl`
+- `data/action_router_validation.jsonl`
+- `models/action_router.joblib`
+- `reports/action_router_report.txt`
+- `reports/action_router_eval.txt`
+- `reports/action_router_errors.jsonl`
+
+Use local intent model in runtime (`ai_agent.py`):
+
+```powershell
+# enabled by default when models/intent_model.joblib exists
+$env:TASK_LOCAL_INTENT_ENABLED="1"
+$env:TASK_LOCAL_INTENT_MIN_CONFIDENCE="0.55"
+$env:TASK_LOCAL_ACTION_ENABLED="1"
+$env:TASK_LOCAL_ACTION_MIN_CONFIDENCE="0.55"
+
+# optional custom model path
+$env:TASK_INTENT_MODEL_PATH="models/intent_model.joblib"
+$env:TASK_ACTION_MODEL_PATH="models/action_router.joblib"
+```

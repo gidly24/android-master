@@ -1,9 +1,11 @@
 import json
+import os
 import re
 import urllib.error
 import urllib.request
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from pathlib import Path
 from typing import Any, Optional
 
 from ai_config import AISettings
@@ -320,6 +322,17 @@ class TaskCommandDispatcher:
 
 
 class TaskAIAgent:
+    LOCAL_INTENT_ACTION_MAP = {
+        "lists_createoradd": "create_task",
+        "calendar_set": "create_task",
+        "alarm_set": "create_task",
+        "lists_remove": "delete_task",
+        "calendar_remove": "delete_task",
+        "alarm_remove": "delete_task",
+        "lists_query": "list_tasks",
+        "calendar_query": "list_tasks",
+    }
+
     SYSTEM_PROMPT = """Ты — интеллектуальный ассистент приложения для управления задачами.
 Твоя задача — превращать естественные русские фразы пользователя в структурированные действия для task manager.
 
@@ -365,6 +378,18 @@ class TaskAIAgent:
         self.dispatcher = TaskCommandDispatcher(task_service)
         self.pending_resolution: Optional[dict[str, Any]] = None
         self.wizard_state: Optional[dict[str, Any]] = None
+        self.local_action_enabled = os.getenv("TASK_LOCAL_ACTION_ENABLED", "1").strip().lower() not in {"0", "false", "no"}
+        try:
+            self.local_action_min_confidence = float(os.getenv("TASK_LOCAL_ACTION_MIN_CONFIDENCE", "0.55"))
+        except ValueError:
+            self.local_action_min_confidence = 0.55
+        self.local_action_model = self._load_local_action_model()
+        self.local_intent_enabled = os.getenv("TASK_LOCAL_INTENT_ENABLED", "1").strip().lower() not in {"0", "false", "no"}
+        try:
+            self.local_intent_min_confidence = float(os.getenv("TASK_LOCAL_INTENT_MIN_CONFIDENCE", "0.55"))
+        except ValueError:
+            self.local_intent_min_confidence = 0.55
+        self.local_intent_model = self._load_local_intent_model()
 
     def process_message(self, message: str, history: Optional[list[dict[str, str]]] = None) -> AssistantReply:
         if message.strip().lower() == "/back_to_menu":
@@ -403,6 +428,14 @@ class TaskAIAgent:
                 answer="Напиши, что нужно сделать с задачами.",
             )
 
+        local_action_command = self._try_local_action_command(text)
+        if local_action_command is not None:
+            return local_action_command
+
+        local_command = self._try_local_intent_command(text)
+        if local_command is not None:
+            return local_command
+
         if self.client is not None:
             try:
                 prompt = self._build_user_prompt(text, history or [])
@@ -412,6 +445,267 @@ class TaskAIAgent:
                 pass
 
         return self._heuristic_command(text)
+
+    def _load_local_action_model(self):
+        if not self.local_action_enabled:
+            return None
+
+        model_path_env = os.getenv("TASK_ACTION_MODEL_PATH", "").strip()
+        if model_path_env:
+            model_path = Path(model_path_env).expanduser()
+            if not model_path.is_absolute():
+                model_path = Path(__file__).resolve().parent / model_path
+        else:
+            model_path = Path(__file__).resolve().parent / "models" / "action_router.joblib"
+
+        if not model_path.exists():
+            return None
+
+        try:
+            import joblib
+
+            bundle = joblib.load(model_path)
+        except Exception:
+            return None
+
+        if isinstance(bundle, dict) and bundle.get("pipeline") is not None:
+            return bundle["pipeline"]
+        return bundle
+
+    def _try_local_action_command(self, text: str) -> Optional[AgentCommand]:
+        predicted = self._predict_local_action(text)
+        if predicted is None:
+            return None
+        action, confidence = predicted
+        if confidence < self.local_action_min_confidence:
+            return None
+        lowered = text.lower()
+        if not self._local_action_matches_text(action, lowered):
+            return None
+
+        heuristic = self._heuristic_command(text)
+        if heuristic.action == action and action != "clarify":
+            return heuristic
+        if not (heuristic.action == "clarify" and heuristic.data.get("missing_field") == "intent"):
+            return heuristic
+
+        if action == "create_task":
+            return self._build_forced_create_command(text, lowered)
+        if action == "delete_task":
+            return self._build_forced_delete_command(text)
+        if action == "list_tasks":
+            return self._build_forced_list_command(lowered)
+        if action == "mark_as_done":
+            return self._build_forced_mark_done_command(text)
+        if action == "update_task":
+            return self._build_forced_update_command(text, lowered)
+        if action == "get_statistics":
+            return AgentCommand("get_statistics", {}, "Сейчас покажу статистику по задачам.")
+        return None
+
+    @staticmethod
+    def _local_action_matches_text(action: str, lowered: str) -> bool:
+        if action == "create_task":
+            markers = ("добавь", "добавить", "создай", "создать", "запиши", "поставь задачу", "напомни")
+            return any(marker in lowered for marker in markers) or TaskAIAgent._looks_like_implicit_task(lowered)
+        if action == "delete_task":
+            return any(marker in lowered for marker in ("удали", "удалить", "убери"))
+        if action == "mark_as_done":
+            return any(marker in lowered for marker in ("отметь", "выполни", "выполнен", "закрой", "заверши"))
+        if action == "update_task":
+            return any(marker in lowered for marker in ("измени", "изменить", "обнови", "поменяй", "перенеси", "перенести"))
+        if action == "list_tasks":
+            return any(marker in lowered for marker in ("покажи", "список", "задач", "дела", "что у меня"))
+        if action == "get_statistics":
+            return any(marker in lowered for marker in ("статист", "сколько", "просроч"))
+        return True
+
+    def _predict_local_action(self, text: str) -> Optional[tuple[str, float]]:
+        model = self.local_action_model
+        if model is None:
+            return None
+
+        try:
+            predicted_action = str(model.predict([text])[0]).strip()
+        except Exception:
+            return None
+
+        if predicted_action not in ALLOWED_ACTIONS:
+            return None
+        if predicted_action in {"clarify", "back_to_menu"}:
+            return None
+
+        confidence = 0.0
+        try:
+            if hasattr(model, "predict_proba"):
+                probs = model.predict_proba([text])[0]
+                confidence = float(max(probs)) if len(probs) else 0.0
+        except Exception:
+            confidence = 0.0
+        return predicted_action, confidence
+
+    def _load_local_intent_model(self):
+        if not self.local_intent_enabled:
+            return None
+
+        model_path_env = os.getenv("TASK_INTENT_MODEL_PATH", "").strip()
+        if model_path_env:
+            model_path = Path(model_path_env).expanduser()
+            if not model_path.is_absolute():
+                model_path = Path(__file__).resolve().parent / model_path
+        else:
+            model_path = Path(__file__).resolve().parent / "models" / "intent_model.joblib"
+
+        if not model_path.exists():
+            return None
+
+        try:
+            import joblib
+
+            bundle = joblib.load(model_path)
+        except Exception:
+            return None
+
+        if isinstance(bundle, dict) and bundle.get("pipeline") is not None:
+            return bundle["pipeline"]
+        return bundle
+
+    def _try_local_intent_command(self, text: str) -> Optional[AgentCommand]:
+        predicted = self._predict_local_intent_action(text)
+        if predicted is None:
+            return None
+        action, confidence = predicted
+        if confidence < self.local_intent_min_confidence:
+            return None
+
+        heuristic = self._heuristic_command(text)
+        if not (heuristic.action == "clarify" and heuristic.data.get("missing_field") == "intent"):
+            return heuristic
+
+        lowered = text.lower()
+        if action == "create_task":
+            return self._build_forced_create_command(text, lowered)
+        if action == "delete_task":
+            return self._build_forced_delete_command(text)
+        if action == "list_tasks":
+            return self._build_forced_list_command(lowered)
+        return None
+
+    def _predict_local_intent_action(self, text: str) -> Optional[tuple[str, float]]:
+        model = self.local_intent_model
+        if model is None:
+            return None
+
+        try:
+            predicted_intent = str(model.predict([text])[0]).strip()
+        except Exception:
+            return None
+
+        action = self.LOCAL_INTENT_ACTION_MAP.get(predicted_intent)
+        if not action:
+            return None
+
+        confidence = 0.0
+        try:
+            if hasattr(model, "predict_proba"):
+                probs = model.predict_proba([text])[0]
+                confidence = float(max(probs)) if len(probs) else 0.0
+        except Exception:
+            confidence = 0.0
+        return action, confidence
+
+    def _build_forced_create_command(self, text: str, lowered: str) -> AgentCommand:
+        parsed = parse_relative_datetime(lowered, datetime.now())
+        explicit_time = extract_time(lowered)
+        if parsed.due_at is None and explicit_time is not None:
+            tomorrow = datetime.now() + timedelta(days=1)
+            parsed = parsed.__class__(
+                due_at=datetime.combine(tomorrow.date(), explicit_time),
+                start_date=tomorrow.date(),
+                end_date=tomorrow.date(),
+                has_explicit_time=True,
+            )
+
+        category = self._infer_category(lowered)
+        title = self._infer_title(text, category)
+        recurrence = self._infer_recurrence(lowered)
+        priority = self._infer_priority(lowered, category)
+        description = self._infer_description(text)
+        due_at = parsed.due_at
+        if recurrence and due_at is None:
+            due_at = datetime.now().replace(hour=23, minute=59, second=0, microsecond=0)
+        due_date = due_at.strftime("%Y-%m-%d %H:%M") if due_at else ""
+
+        payload = {
+            "title": title,
+            "description": description,
+            "category": category,
+            "due_date": due_date,
+            "recurrence": recurrence,
+            "priority": priority,
+        }
+        if title.lower() in {"задача", "новая задача", "добавь задачу"}:
+            return AgentCommand(
+                "clarify",
+                {"missing_field": "title", "pending_action": "create_task", "payload": payload},
+                "Как назвать задачу?",
+            )
+        if due_date:
+            return AgentCommand("create_task", payload, f"Понял задачу «{title}».")
+        return AgentCommand(
+            "clarify",
+            {"missing_field": "due_date_choice", "pending_action": "create_task", "payload": payload},
+            f"Понял задачу «{title}». Добавить срок или оставить без даты?",
+        )
+
+    def _build_forced_delete_command(self, text: str) -> AgentCommand:
+        title_query = self._extract_title_query_for_action(text)
+        if not title_query:
+            fallback = self._strip_task_noise(text)
+            if fallback.lower() not in {"", "задача", "дело", "напоминание"}:
+                title_query = fallback
+        if title_query:
+            title_query = re.sub(r"^(задач[аеиу]|задачи|задачу|дело|напоминание)\s+", "", title_query, flags=re.IGNORECASE).strip()
+        if not title_query:
+            return AgentCommand("delete_task", {"title_query": ""}, "Какую задачу удалить?")
+        return AgentCommand("delete_task", {"title_query": title_query}, "Сейчас удалю эту задачу.")
+
+    def _build_forced_list_command(self, lowered: str) -> AgentCommand:
+        filters: dict[str, Any] = {}
+        category = self._infer_category(lowered)
+        if category != "другое" or "другое" in lowered:
+            filters["category"] = category
+        date_context = parse_relative_datetime(lowered, datetime.now())
+        if date_context.start_date:
+            filters["start_date"] = date_context.start_date.isoformat()
+        if date_context.end_date:
+            filters["end_date"] = date_context.end_date.isoformat()
+        if "просроч" in lowered:
+            filters["status"] = "просрочена"
+        if ("актив" in lowered or "текущ" in lowered) and "просроч" not in lowered:
+            filters["view"] = "actual"
+        return AgentCommand("list_tasks", filters, "Сейчас покажу подходящие задачи.")
+
+    def _build_forced_mark_done_command(self, text: str) -> AgentCommand:
+        title_query = self._extract_title_query_for_action(text)
+        if not title_query:
+            fallback = self._strip_task_noise(text)
+            if fallback.lower() not in {"", "задача", "дело", "напоминание"}:
+                title_query = fallback
+        if title_query:
+            title_query = re.sub(r"^(задач[аеиу]|задачи|задачу|дело|напоминание)\s+", "", title_query, flags=re.IGNORECASE).strip()
+        if not title_query:
+            return AgentCommand("mark_as_done", {"title_query": ""}, "Какую задачу отметить выполненной?")
+        return AgentCommand("mark_as_done", {"title_query": title_query}, "Сейчас отмечу задачу выполненной.")
+
+    def _build_forced_update_command(self, text: str, lowered: str) -> AgentCommand:
+        command = self._heuristic_update_command(text, lowered)
+        if command.action == "update_task":
+            return command
+        title_query = self._extract_title_query_for_action(text)
+        if title_query:
+            return AgentCommand("update_task", {"title_query": title_query}, "Сейчас обновлю задачу.")
+        return AgentCommand("update_task", {"title_query": ""}, "Какую задачу нужно изменить?")
 
     def _build_user_prompt(self, message: str, history: list[dict[str, str]]) -> str:
         now = datetime.now()
@@ -812,7 +1106,8 @@ class TaskAIAgent:
             match = re.search(pattern, lowered)
             if match:
                 result = match.group(1).strip(" .!?\"'")
-                if result in {"задачу", "дело", "напоминание", "задача"}:
+                result = re.sub(r"^(задач[аеиу]|задачи|задачу|дело|напоминание)\s+", "", result, flags=re.IGNORECASE).strip()
+                if result in {"", "задачу", "дело", "напоминание", "задача"}:
                     return ""
                 return result
         return ""
