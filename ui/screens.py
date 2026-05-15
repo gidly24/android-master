@@ -170,39 +170,53 @@ class TaskListScreen(Screen):
     def _build_ui(self):
         root = BoxLayout(orientation="vertical", spacing=dp(8), padding=(dp(8), dp(8), dp(8), dp(8)))
 
-        top = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
-        title = Label(text="Задачи", color=TEXT_PRIMARY, halign="left", valign="middle", font_size=FONT_SIZE, bold=True)
+        top = BoxLayout(
+            size_hint_y=None,
+            height=dp(48),
+            spacing=dp(8),
+            padding=(dp(8), 0, dp(8), 0),
+        )
+
+        title = Label(
+            text="Задачи",
+            color=TEXT_PRIMARY,
+            halign="left",
+            valign="middle",
+            font_size=FONT_SIZE,
+            bold=True,
+        )
+
         title.bind(size=lambda *_: setattr(title, "text_size", title.size))
-        filter_size = dp(38)
+
         self.filter_btn = IconCircleButton(
             icon_source=MORE_ICON,
             fallback_text="⋮",
-            size_hint=(None, None),
-            width=filter_size,
-            height=filter_size,
-            radius=filter_size / 2,
-            font_size=FONT_SIZE,
             fill_color=M3_PRIMARY,
             text_color=TEXT_PRIMARY,
+            size_hint=(None, None),
+            size=(dp(38), dp(38)),
         )
-        self.filter_btn.bind(on_release=lambda *_: self.toggle_filters())
+
         top.add_widget(title)
+        top.add_widget(Widget())
         top.add_widget(self.filter_btn)
+
         root.add_widget(top)
 
         self.filters_host = BoxLayout(orientation="vertical", size_hint_y=None, height=0, opacity=0)
         self.filters_panel = BoxLayout(orientation="vertical", spacing=dp(6), size_hint_y=None)
         self.filters_panel.bind(minimum_height=self.filters_panel.setter("height"))
-        self.search_input = MaterialTextInput(multiline=False, hint_text="Поиск по названию")
-        self.status_spinner = MaterialSpinner(text="Все", values=("Все", "Активна", "Просрочена", "Выполнена"))
-        self.category_spinner = MaterialSpinner(text="Все", values=tuple(["Все"] + [c.capitalize() for c in CATEGORIES]))
-        sp = BoxLayout(size_hint_y=None, height=dp(44), spacing=dp(6))
+        input_height = dp(44)
+        self.search_input = MaterialTextInput(multiline=False, hint_text="Поиск по названию", size_hint_y=None, height=input_height)
+        self.status_spinner = MaterialSpinner(text="Все", values=("Все", "Активна", "Просрочена", "Выполнена"), size_hint_x=1, size_hint_y=None, height=input_height)
+        self.category_spinner = MaterialSpinner(text="Все", values=tuple(["Все"] + [c.capitalize() for c in CATEGORIES]), size_hint_x=1, size_hint_y=None, height=input_height)
+        sp = BoxLayout(size_hint_y=None, height=input_height, spacing=dp(6))
         sp.add_widget(self.status_spinner)
         sp.add_widget(self.category_spinner)
-        fa = BoxLayout(size_hint_y=None, height=dp(38), spacing=dp(6))
-        apply_btn = FilledButton(text="Применить", height=dp(38))
+        fa = BoxLayout(size_hint_y=None, height=input_height, spacing=dp(6))
+        apply_btn = FilledButton(text="Применить", height=input_height, size_hint_x=1)
         apply_btn.bind(on_release=lambda *_: self.apply_filters())
-        reset_btn = MaterialButton(text="Сброс", height=dp(38))
+        reset_btn = MaterialButton(text="Сброс", height=input_height, size_hint_x=1)
         reset_btn.bind(on_release=lambda *_: self.reset_filters())
         fa.add_widget(apply_btn)
         fa.add_widget(reset_btn)
@@ -220,11 +234,16 @@ class TaskListScreen(Screen):
         footer = BoxLayout(size_hint_y=None, height=dp(58), spacing=dp(10), padding=(0, dp(2), 0, 0))
         add_btn = CircleButton(text="+", fill_color=M3_PRIMARY, text_color=TEXT_PRIMARY)
         add_btn.bind(on_release=lambda *_: self.open_task_form())
-        ai_btn = CircleButton(text="AI", fill_color=M3_PRIMARY, text_color=TEXT_PRIMARY, font_size=FONT_SIZE)
-        ai_btn.bind(on_release=lambda *_: self._open_chat())
+        chat_btn = IconCircleButton(
+            icon_source="assets/icons/chat.ico",
+            fallback_text="💬",
+            fill_color=M3_PRIMARY,
+            text_color=TEXT_PRIMARY
+        )
+        chat_btn.bind(on_release=lambda *_: self._open_chat())
         footer.add_widget(Widget())
         footer.add_widget(add_btn)
-        footer.add_widget(ai_btn)
+        footer.add_widget(chat_btn)
         root.add_widget(footer)
         self.add_widget(root)
 

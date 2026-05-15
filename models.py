@@ -2,7 +2,7 @@ from dataclasses import dataclass
 from typing import Optional
 
 
-CATEGORIES = ["лекарства", "платежи", "бытовые дела", "подписки", "другое"]
+CATEGORIES = ["работа", "личное", "покупки", "здоровье", "другое"]
 RECURRENCE_OPTIONS = ["одноразовая", "ежедневно", "еженедельно", "ежемесячно"]
 PRIORITY_OPTIONS = ["низкий", "средний", "высокий"]
 STATUS_OPTIONS = ["активна", "выполнена", "просрочена"]

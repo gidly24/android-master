@@ -328,14 +328,17 @@ PythonProject/
 
 ### Что НЕ обучается в этом проекте
 
-- Внешняя LLM (`OpenAI`/`DeepSeek`) **не обучается локально** в этом репозитории.  
+- Внешняя LLM (`OpenAI`/`DeepSeek`/`Claude`/`Gemini`, включая `ProxyAPI`) **не обучается локально** в этом репозитории.  
   Проект только отправляет запросы к API.
 
 ## 7.5 Переменные окружения AI
 
 - `OPENAI_API_KEY`
 - `DEEPSEEK_API_KEY`
-- `TASK_AI_PROVIDER` (`openai` / `deepseek`)
+- `ANTHROPIC_API_KEY`
+- `GEMINI_API_KEY`
+- `PROXYAPI_API_KEY`
+- `TASK_AI_PROVIDER` (`openai` / `deepseek` / `proxyapi_openai` / `proxyapi_anthropic` / `proxyapi_gemini` / `proxyapi_compatible`)
 - `TASK_AI_BASE_URL`
 - `TASK_AI_API_KEY`
 - `TASK_AI_MODEL`

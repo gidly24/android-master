@@ -68,7 +68,7 @@ class ChatBubble(MaterialCard):
 
 
 class ChatModal(ModalView):
-    def __init__(self, agent, on_tasks_changed=None, **kwargs):
+    def __init__(self, agent=None, service=None, on_tasks_changed=None, **kwargs):
         kwargs.setdefault("size_hint", (0.94, 0.94))
         kwargs.setdefault("auto_dismiss", True)
         kwargs.setdefault("background", "")
@@ -77,11 +77,12 @@ class ChatModal(ModalView):
         self.overlay_color = (APP_BACKGROUND[0], APP_BACKGROUND[1], APP_BACKGROUND[2], 0.45)
 
         self.agent = agent
+        self.service = service
         self.on_tasks_changed = on_tasks_changed
         self.history = []
         self._busy = False
         self._build_ui()
-        self._append_message("assistant", "Что нужно запланировать?")
+        self._append_message("assistant", "Привет! Какие планы?")
 
     def _build_ui(self):
         root = MaterialCard(
@@ -133,10 +134,45 @@ class ChatModal(ModalView):
 
     def _worker(self, text):
         try:
-            reply = self.agent.process_message(text, history=self.history)
-            Clock.schedule_once(lambda *_: self._on_reply(reply), 0)
-        except Exception:
-            Clock.schedule_once(lambda *_: self._on_error(), 0)
+            result = self.agent.process_message(text)
+
+            if result["success"]:
+                data = result["data"]
+
+                # Создаем задачу если action="create"
+                if data.get("action") == "create" and data.get("title"):
+                    priority = data.get("priority", "").strip()
+                    # Если приоритет не указан, используем средний по умолчанию
+                    if not priority:
+                        priority = "средний"
+
+                    task_data = {
+                        "title": data.get("title", "").strip(),
+                        "description": data.get("description", "").strip(),
+                        "category": data.get("category", "другое").strip().lower(),
+                        "due_date": data.get("due_date", "") or "",
+                        "due_time": "",
+                        "recurrence": "одноразовая",
+                        "priority": priority,
+                    }
+                    self.service.save_task(task_data)
+                    response = f"Создал задачу: {data['title']}"
+                    Clock.schedule_once(lambda *_: self._append_message("assistant", response), 0)
+                    Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
+                    if self.on_tasks_changed:
+                        Clock.schedule_once(lambda *_: self.on_tasks_changed(), 0)
+                else:
+                    response = "Я не смог понять, нужно создать задачу. Опиши её подробнее."
+                    Clock.schedule_once(lambda *_: self._append_message("assistant", response), 0)
+                    Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
+            else:
+                msg = f"Ошибка: {result.get('error', 'Неизвестная ошибка')}"
+                Clock.schedule_once(lambda *_: self._append_message("assistant", msg), 0)
+                Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
+        except Exception as e:
+            msg = f"Ошибка: {str(e)}"
+            Clock.schedule_once(lambda *_: self._append_message("assistant", msg), 0)
+            Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
 
     def _on_reply(self, reply):
         self._append_message(

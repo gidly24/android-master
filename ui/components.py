@@ -271,10 +271,10 @@ class Chip(Label):
 class CircleButton(MaterialButton):
     def __init__(self, **kwargs):
         kwargs.setdefault("size_hint", (None, None))
-        kwargs.setdefault("width", dp(52))
-        kwargs.setdefault("height", dp(52))
-        kwargs.setdefault("radius", dp(26))
-        kwargs.setdefault("font_size", FONT_SIZE)
+        kwargs.setdefault("width", dp(58))
+        kwargs.setdefault("height", dp(58))
+        kwargs.setdefault("radius", dp(29))
+        kwargs.setdefault("font_size", "24sp")
         kwargs.setdefault("bold", True)
         super().__init__(**kwargs)
 
@@ -284,6 +284,8 @@ class IconCircleButton(CircleButton):
         kwargs.setdefault("text", fallback_text)
         super().__init__(**kwargs)
         self._icon = None
+        self._bg = None
+        self._bg_color = None
         if icon_source:
             path = Path(icon_source)
             if path.exists():
@@ -294,6 +296,11 @@ class IconCircleButton(CircleButton):
                 self.add_widget(self._icon)
                 self.bind(pos=self._update_icon, size=self._update_icon)
                 Clock.schedule_once(self._update_icon, 0)
+        with self.canvas.before:
+            self._bg_color = Color(*self.fill_color)
+            self._bg = Ellipse()
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
+        Clock.schedule_once(self._update_canvas, 0)
 
     def _update_icon(self, *_):
         if self._icon is None:
@@ -307,6 +314,11 @@ class IconCircleButton(CircleButton):
             self.x + (self.width - icon_side) / 2,
             self.y + (self.height - icon_side) / 2,
         )
+
+    def _update_canvas(self, *_):
+        if self._bg:
+            self._bg.pos = self.pos
+            self._bg.size = self.size
 
 
 class MaterialLabel(Label):
