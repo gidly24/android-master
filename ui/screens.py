@@ -172,9 +172,9 @@ class TaskListScreen(Screen):
 
         top = BoxLayout(
             size_hint_y=None,
-            height=dp(48),
-            spacing=dp(8),
-            padding=(dp(8), 0, dp(8), 0),
+            height=dp(58),
+            spacing=dp(10),
+            padding=(0, dp(2), 0, 0),
         )
 
         title = Label(
@@ -184,18 +184,20 @@ class TaskListScreen(Screen):
             valign="middle",
             font_size=FONT_SIZE,
             bold=True,
+            size_hint_y=None,
+            height=dp(58),
         )
 
         title.bind(size=lambda *_: setattr(title, "text_size", title.size))
+        bind_text_size(title)
 
         self.filter_btn = IconCircleButton(
             icon_source=MORE_ICON,
             fallback_text="⋮",
             fill_color=M3_PRIMARY,
             text_color=TEXT_PRIMARY,
-            size_hint=(None, None),
-            size=(dp(38), dp(38)),
         )
+        self.filter_btn.bind(on_release=lambda *_: self.toggle_filters())
 
         top.add_widget(title)
         top.add_widget(Widget())

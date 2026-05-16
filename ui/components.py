@@ -1,7 +1,7 @@
 from pathlib import Path
 
 from kivy.clock import Clock
-from kivy.graphics import Color, RoundedRectangle, Rectangle
+from kivy.graphics import Color, RoundedRectangle, Rectangle, Ellipse
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -284,8 +284,13 @@ class IconCircleButton(CircleButton):
         kwargs.setdefault("text", fallback_text)
         super().__init__(**kwargs)
         self._icon = None
-        self._bg = None
-        self._bg_color = None
+        with self.canvas.before:
+            self._bg_color = Color(*self.fill_color)
+            self._bg = Ellipse(
+                pos=self.pos,
+                size=self.size
+            )
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
         if icon_source:
             path = Path(icon_source)
             if path.exists():
@@ -296,10 +301,6 @@ class IconCircleButton(CircleButton):
                 self.add_widget(self._icon)
                 self.bind(pos=self._update_icon, size=self._update_icon)
                 Clock.schedule_once(self._update_icon, 0)
-        with self.canvas.before:
-            self._bg_color = Color(*self.fill_color)
-            self._bg = Ellipse()
-        self.bind(pos=self._update_canvas, size=self._update_canvas)
         Clock.schedule_once(self._update_canvas, 0)
 
     def _update_icon(self, *_):
@@ -316,9 +317,10 @@ class IconCircleButton(CircleButton):
         )
 
     def _update_canvas(self, *_):
-        if self._bg:
-            self._bg.pos = self.pos
-            self._bg.size = self.size
+        super()._update_canvas()
+
+        self._bg.pos = self.pos
+        self._bg.size = self.size
 
 
 class MaterialLabel(Label):

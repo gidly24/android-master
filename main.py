@@ -59,7 +59,7 @@ class TaskControlApp(App):
         self.service.initialize_demo_data()
 
         try:
-            self.ai_assistant = AIAssistant()
+            self.ai_assistant = AIAssistant(task_service=self.service)
         except ValueError:
             self.ai_assistant = None
 

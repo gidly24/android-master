@@ -205,17 +205,15 @@ class TaskService:
         }
 
     def create_task_from_ai(self, payload: dict):
-        due_date_value = (payload.get("due_date") or "").strip()
-        due_date_part = ""
-        due_time_part = ""
-        if due_date_value:
-            normalized_due = due_date_value.replace("T", " ")
-            if " " in normalized_due:
-                due_date_part, due_time_part = normalized_due.split(" ", 1)
-                due_time_part = due_time_part[:5]
-            else:
-                due_date_part = normalized_due
-                due_time_part = ""
+        due_date_part = (payload.get("due_date") or "").strip()
+        due_time_part = (payload.get("due_time") or "").strip()
+
+        # Handle case where AI might send full ISO in due_date
+        if " " in due_date_part or "T" in due_date_part:
+            normalized_due = due_date_part.replace("T", " ")
+            due_date_part, time_val = normalized_due.split(" ", 1)
+            if not due_time_part:
+                due_time_part = time_val[:5]
 
         recurrence_key = (payload.get("recurrence") or "").strip().lower()
         recurrence_map = {
@@ -225,12 +223,8 @@ class TaskService:
             "ежемесячно": "ежемесячно",
         }
 
-        try:
-            priority_value = int(payload.get("priority", 2))
-        except (TypeError, ValueError):
-            priority_value = 2
+        priority_label = self._priority_from_ai(payload.get("priority"), "средний")
 
-        priority_map = {1: "низкий", 2: "средний", 3: "высокий"}
         task_data = {
             "title": (payload.get("title") or "").strip(),
             "description": (payload.get("description") or "Создано через ИИ-чат").strip(),
@@ -238,7 +232,7 @@ class TaskService:
             "due_date": due_date_part,
             "due_time": due_time_part,
             "recurrence": recurrence_map.get(recurrence_key, "одноразовая"),
-            "priority": priority_map.get(priority_value, "средний"),
+            "priority": priority_label,
             "status": "активна",
         }
 
@@ -328,13 +322,18 @@ class TaskService:
     def update_task_from_ai(self, payload: dict):
         task_id = payload.get("task_id")
         task = self.get_task(int(task_id)) if task_id else None
+        
+        # Flatten new_values if present to simplify processing
+        new_values = payload.get("new_values", {})
+        processed_payload = {**payload, **new_values} if isinstance(new_values, dict) else payload
+
         if task is None:
-            title_query = payload.get("title_query", "")
+            title_query = processed_payload.get("title_query", "")
             active_tasks = self.get_tasks()
             if not active_tasks:
                 return {"action": "clarify", "answer": "Активных задач сейчас нет."}
             if not title_query:
-                update_payload = dict(payload)
+                update_payload = dict(processed_payload)
                 update_payload.pop("task_id", None)
                 return {
                     "action": "clarify",
@@ -347,7 +346,7 @@ class TaskService:
             if not matches:
                 return {"action": "clarify", "answer": "Не нашел задачу для изменения. Могу показать активные задачи для выбора."}
             if len(matches) > 1:
-                update_payload = dict(payload)
+                update_payload = dict(processed_payload)
                 update_payload.pop("task_id", None)
                 return {
                     "action": "clarify",
@@ -358,8 +357,8 @@ class TaskService:
                 }
             task = matches[0]
 
-        editable_fields = {"title", "description", "category", "due_date", "recurrence", "priority", "clear_due_date"}
-        if not any(field in payload for field in editable_fields):
+        editable_fields = {"title", "description", "category", "due_date", "due_time", "recurrence", "priority", "clear_due_date"}
+        if not any(field in processed_payload for field in editable_fields):
             return {
                 "action": "clarify",
                 "pending_action": "update_task",
@@ -368,26 +367,34 @@ class TaskService:
             }
 
         task_data = {
-            "title": str(payload.get("title", task.title)).strip() or task.title,
-            "description": str(payload.get("description", task.description)).strip(),
-            "category": str(payload.get("category", task.category)).strip().lower(),
+            "title": str(processed_payload.get("title", task.title)).strip() or task.title,
+            "description": str(processed_payload.get("description", task.description)).strip(),
+            "category": str(processed_payload.get("category", task.category)).strip().lower(),
             "due_date": task.due_date,
             "due_time": task.due_time,
-            "recurrence": str(payload.get("recurrence", task.recurrence)).strip().lower(),
-            "priority": self._priority_from_ai(payload.get("priority"), task.priority),
+            "recurrence": str(processed_payload.get("recurrence", task.recurrence)).strip().lower(),
+            "priority": self._priority_from_ai(processed_payload.get("priority"), task.priority),
             "status": task.status,
         }
-        if payload.get("clear_due_date"):
+
+        if processed_payload.get("clear_due_date"):
             task_data["due_date"] = ""
             task_data["due_time"] = ""
-        if payload.get("due_date"):
-            normalized_due = str(payload["due_date"]).replace("T", " ").strip()
+        
+        # Priority mapping is already handled by _priority_from_ai called above
+
+        if processed_payload.get("due_date"):
+            normalized_due = str(processed_payload["due_date"]).replace("T", " ").strip()
             if " " in normalized_due:
                 task_data["due_date"], task_data["due_time"] = normalized_due.split(" ", 1)
                 task_data["due_time"] = task_data["due_time"][:5]
             else:
                 task_data["due_date"] = normalized_due
-                task_data["due_time"] = ""
+                # If AI also provided due_time explicitly
+                if processed_payload.get("due_time"):
+                    task_data["due_time"] = str(processed_payload["due_time"]).strip()[:5]
+        elif processed_payload.get("due_time"):
+            task_data["due_time"] = str(processed_payload["due_time"]).strip()[:5]
 
         self.save_task(task_data, task.id)
         return {"updated": True, "task_id": task.id, "answer": f"Готово, обновил задачу «{task.title}»."}
@@ -478,6 +485,14 @@ class TaskService:
     def _priority_from_ai(value, current_priority: str) -> str:
         if value in (None, ""):
             return current_priority
+        
+        # Handle string labels
+        if isinstance(value, str):
+            val_lower = value.strip().lower()
+            if val_lower in ["низкий", "средний", "высокий"]:
+                return val_lower
+        
+        # Handle numeric values
         mapping = {1: "низкий", 2: "средний", 3: "высокий"}
         try:
             return mapping.get(int(value), current_priority)
