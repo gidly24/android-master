@@ -133,42 +133,30 @@ class ChatModal(ModalView):
         Thread(target=self._worker, args=(text,), daemon=True).start()
 
     def _worker(self, text):
+        if self.agent is None:
+            error_message = "AI-ассистент недоступен. Пожалуйста, убедитесь, что переменная окружения GOOGLE_API_KEY установлена."
+            Clock.schedule_once(lambda *_: self._append_message("assistant", error_message), 0)
+            Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
+            return
+
         try:
-            result = self.agent.process_message(text)
+            # Use the more comprehensive get_response that handles multiple actions via TaskService
+            response = self.agent.get_response(text)
+            
+            Clock.schedule_once(lambda *_: self._append_message("assistant", response), 0)
+            Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
+            
+            # Since we don't know exactly if a task was changed from the string response,
+            # we can either check for keywords in the response or modify get_response to return metadata.
+            # For now, let's assume if it doesn't look like an error/clarification, we might want to refresh.
+            # Actually, most actions that aren't "clarifications" or "errors" will change tasks.
+            if self.on_tasks_changed:
+                # Refresh tasks if the response sounds successful (contains "Готово", "Создал", "Удалил", "Обновил", "Отметил")
+                # These are the prefixes used in TaskService methods.
+                success_keywords = ["Готово", "Создал", "Удалил", "Обновил", "Отметил", "добавил"]
+                if any(kw in response for kw in success_keywords):
+                    Clock.schedule_once(lambda *_: self.on_tasks_changed(), 0)
 
-            if result["success"]:
-                data = result["data"]
-
-                # Создаем задачу если action="create"
-                if data.get("action") == "create" and data.get("title"):
-                    priority = data.get("priority", "").strip()
-                    # Если приоритет не указан, используем средний по умолчанию
-                    if not priority:
-                        priority = "средний"
-
-                    task_data = {
-                        "title": data.get("title", "").strip(),
-                        "description": data.get("description", "").strip(),
-                        "category": data.get("category", "другое").strip().lower(),
-                        "due_date": data.get("due_date", "") or "",
-                        "due_time": "",
-                        "recurrence": "одноразовая",
-                        "priority": priority,
-                    }
-                    self.service.save_task(task_data)
-                    response = f"Создал задачу: {data['title']}"
-                    Clock.schedule_once(lambda *_: self._append_message("assistant", response), 0)
-                    Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
-                    if self.on_tasks_changed:
-                        Clock.schedule_once(lambda *_: self.on_tasks_changed(), 0)
-                else:
-                    response = "Я не смог понять, нужно создать задачу. Опиши её подробнее."
-                    Clock.schedule_once(lambda *_: self._append_message("assistant", response), 0)
-                    Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
-            else:
-                msg = f"Ошибка: {result.get('error', 'Неизвестная ошибка')}"
-                Clock.schedule_once(lambda *_: self._append_message("assistant", msg), 0)
-                Clock.schedule_once(lambda *_: self._set_busy(False, ""), 0)
         except Exception as e:
             msg = f"Ошибка: {str(e)}"
             Clock.schedule_once(lambda *_: self._append_message("assistant", msg), 0)

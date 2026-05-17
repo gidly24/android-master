@@ -23,11 +23,11 @@ You must infer the user's intent and provide the most appropriate JSON based on 
 
 Today's date is {self.today_date}.
 
-Available actions: "create", "delete", "mark_done", "update".
+Available actions: "create", "delete", "mark_done", "update", "list", "get_stats".
 
 JSON Structure:
 {{
-  "action": "create" | "delete" | "mark_done" | "update" | null,
+  "action": "create" | "delete" | "mark_done" | "update" | "list" | "get_stats" | null,
   
   // Fields for "create" action:
   "title": "task title", // Mandatory. If missing, return an error JSON.
@@ -43,7 +43,7 @@ JSON Structure:
 
   // Fields for "mark_done" action:
   "task_id": integer, // Use if explicitly given.
-  "title_query": "task title to search for and mark as done", // Use if task_id is not known or provided.
+  "title_query": "task title to search for and mark as done", // Use if task_id is not known or provided. Use for "выполнить", "сделано", "завершить".
 
   // Fields for "update" action:
   "task_id": integer, // Use if explicitly given.
@@ -56,6 +56,14 @@ JSON Structure:
     "due_time": "HH:MM", // Optional
     "priority": "низкий|средний|высокий", // Optional
     "clear_due_date": true // Optional, set to true to remove due date and time.
+  }},
+
+  // Fields for "list" action:
+  "filters": {{
+    "category": "category name", // Optional
+    "status": "активна|выполнена|просрочена", // Optional
+    "title_query": "search text", // Optional
+    "view": "actual" | "all" // "actual" (default) for upcoming/urgent, "all" for everything.
   }},
 
   // General fields for errors or clarifications:
@@ -72,6 +80,8 @@ Rules:
 6.  Preserve existing values for fields not specified in `new_values` during an update.
 7.  Parse dates and times relative to today's date: {self.today_date}. Use `YYYY-MM-DD` for dates and `HH:MM` for times. If only a date is given, assume time is `23:59`. If the user explicitly asks to remove the due date, use `clear_due_date: true`.
 8.  If no specific action can be determined, return `action: null` with an `error` or `clarification`.
+9.  If the user asks to "показать задачи", "список", "что у меня на сегодня", use the `list` action.
+10. If the user asks for "статистика", "сколько задач", use the `get_stats` action.
 """
 
     def process_message(self, text: str) -> dict:
@@ -178,6 +188,10 @@ Rules:
                     service_response = self.task_service.mark_task_done_from_ai(data)
                 elif action == "update":
                     service_response = self.task_service.update_task_from_ai(data)
+                elif action == "list":
+                    service_response = self.task_service.list_tasks_for_ai(data.get("filters", {}))
+                elif action == "get_stats":
+                    service_response = self.task_service.get_statistics_for_ai()
                 
                 # If the service call was successful and returned an answer
                 if service_response and "answer" in service_response:
