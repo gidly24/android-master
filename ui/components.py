@@ -10,7 +10,6 @@ from kivy.uix.label import Label
 from kivy.uix.spinner import Spinner, SpinnerOption
 from kivy.uix.textinput import TextInput
 
-
 _ROBOTO_BOLD_PATH = Path(__file__).resolve().parent.parent / "assets" / "fonts" / "Roboto-Bold.ttf"
 FONT_NAME = str(_ROBOTO_BOLD_PATH) if _ROBOTO_BOLD_PATH.exists() else "Roboto"
 FONT_SIZE = "16sp"
@@ -98,17 +97,18 @@ class MaterialCard(BoxLayout):
         self._fill.rgba = self.fill_color
         self._rect.pos = self.pos
         self._rect.size = self.size
-        self._rect.radius = [_capsule_radius(self.size, self.radius)]
+        r = _capsule_radius(self.size, self.radius)
+        self._rect.radius = [r, r, r, r]
 
 
 class MaterialButton(Button):
     def __init__(
-        self,
-        fill_color=M3_PRIMARY,
-        border_color=M3_PRIMARY,
-        text_color=TEXT_PRIMARY,
-        radius=None,
-        **kwargs,
+            self,
+            fill_color=M3_PRIMARY,
+            border_color=M3_PRIMARY,
+            text_color=TEXT_PRIMARY,
+            radius=None,
+            **kwargs,
     ):
         kwargs.setdefault("background_normal", "")
         kwargs.setdefault("background_down", "")
@@ -151,7 +151,8 @@ class MaterialButton(Button):
         self.color = self.text_color
         self._rect.pos = self.pos
         self._rect.size = self.size
-        self._rect.radius = [_capsule_radius(self.size, self.radius)]
+        r = _capsule_radius(self.size, self.radius)
+        self._rect.radius = [r, r, r, r]
 
 
 class FilledButton(MaterialButton):
@@ -172,14 +173,23 @@ class DangerButton(MaterialButton):
 
 class MaterialTextInput(TextInput):
     def __init__(self, radius=dp(24), **kwargs):
+        # 1. Возвращаем стандартные фоновые свойства Kivy в пустые строки,
+        # чтобы дефолтная белая коробка Windows не рисовалась поверх нашей плашки
+        # 1. Возвращаем стандартные фоновые свойства Kivy в пустые строки,
+        # чтобы дефолтная белая коробка Windows не рисовалась поверх нашей плашки
         kwargs.setdefault("background_normal", "")
         kwargs.setdefault("background_active", "")
+        kwargs.setdefault("background_disabled_normal", "")  # <-- ИСПРАВЛЕНО НА ВАЛИДНОЕ СВОЙСТВО
+
+        # 2. Важно: оставляем цвет TRANSPARENT_APP, чтобы Kivy не рисовал свой фон,
+        # но мы полностью перепишем холст before
         kwargs.setdefault("background_color", TRANSPARENT_APP)
+
         kwargs.setdefault("foreground_color", TEXT_PRIMARY)
         kwargs.setdefault("disabled_foreground_color", TEXT_PRIMARY)
         kwargs.setdefault("cursor_color", M3_PRIMARY)
         kwargs.setdefault("selection_color", (M3_PRIMARY[0], M3_PRIMARY[1], M3_PRIMARY[2], 0.35))
-        kwargs.setdefault("cursor_width", dp(1.8))
+        kwargs.setdefault("cursor_width", dp(2))
         kwargs.setdefault("cursor_blink", True)
         kwargs.setdefault("hint_text_color", TEXT_MUTED)
         kwargs.setdefault("font_name", FONT_NAME)
@@ -187,21 +197,38 @@ class MaterialTextInput(TextInput):
         kwargs.setdefault("size_hint_y", None)
         kwargs.setdefault("height", dp(46))
         kwargs.setdefault("font_size", FONT_SIZE)
+        kwargs.setdefault("input_type", "text")
+        kwargs.setdefault("keyboard_suggestions", True)
+
         super().__init__(**kwargs)
         self.radius = radius
+
+        # 3. Магия слоев: canvas.before выполняется строго ДО отрисовки текста.
+        # Чтобы текст и каретка не перекрывались нашей плашкой, мы изолируем
+        # контекст цвета подложки, а в самом конце СБРАСЫВАЕМ цвет в чисто белый (1,1,1,1).
+        # Kivy использует белый цвет как базовый множитель для вывода текста и каретки!
         with self.canvas.before:
             self._fill = Color(*INPUT_FILL)
             self._rect = RoundedRectangle(radius=[0])
-            # Reset color context so text/caret rendering stays visible.
-            self._text_pass = Color(*self.foreground_color)
-        self.bind(pos=self._update_canvas, size=self._update_canvas, focus=self._update_canvas)
+            self._ctx_reset = Color(1, 1, 1, 1)  # Этот сброс вернет текст на передний план
+
+        self.bind(pos=self._update_canvas, size=self._update_canvas)
         Clock.schedule_once(self._update_canvas, 0)
 
     def _update_canvas(self, *_):
         self._rect.pos = self.pos
         self._rect.size = self.size
-        self._rect.radius = [_capsule_radius(self.size, self.radius)]
-        self._text_pass.rgba = self.foreground_color
+
+        # Наше скругление для всех 4 углов (исправление для Android)
+        r = _capsule_radius(self.size, self.radius)
+        self._rect.radius = [r, r, r, r]
+
+        # Гарантируем, что перед началом рендеринга букв Kivy увидит чистый цвет
+        self._ctx_reset.rgba = (1, 1, 1, 1)
+
+        # Принудительно будим каретку Windows/Android
+        if hasattr(self, '_trigger_cursor_blink'):
+            self._trigger_cursor_blink()
 
 
 class SpinnerOptionMaterial(SpinnerOption):
@@ -228,16 +255,21 @@ class MaterialSpinner(Spinner):
         kwargs.setdefault("option_cls", SpinnerOptionMaterial)
         super().__init__(**kwargs)
         self.radius = radius
+
         with self.canvas.before:
-            self._fill = Color(*SPINNER_FILL)
+            self._fill = Color(*INPUT_FILL)
             self._rect = RoundedRectangle(radius=[0])
+            self._text_pass = Color(1, 1, 1, 1)
+
+        # focus удален, чтобы не вызывать ошибку KeyError
         self.bind(pos=self._update_canvas, size=self._update_canvas)
         Clock.schedule_once(self._update_canvas, 0)
 
     def _update_canvas(self, *_):
         self._rect.pos = self.pos
         self._rect.size = self.size
-        self._rect.radius = [_capsule_radius(self.size, self.radius)]
+        r = _capsule_radius(self.size, self.radius)
+        self._rect.radius = [r, r, r, r]
 
 
 class Chip(Label):
@@ -255,7 +287,8 @@ class Chip(Label):
         with self.canvas.before:
             self._fill = Color(*self.fill_color)
             self._rect = RoundedRectangle(radius=[0])
-        self.bind(texture_size=self._update_size, text=self._update_size, pos=self._update_canvas, size=self._update_canvas)
+        self.bind(texture_size=self._update_size, text=self._update_size, pos=self._update_canvas,
+                  size=self._update_canvas)
         Clock.schedule_once(self._update_size, 0)
 
     def _update_size(self, *_):
@@ -265,7 +298,8 @@ class Chip(Label):
     def _update_canvas(self, *_):
         self._rect.pos = self.pos
         self._rect.size = self.size
-        self._rect.radius = [_capsule_radius(self.size, self.radius)]
+        r = _capsule_radius(self.size, self.radius)
+        self._rect.radius = [r, r, r, r]
 
 
 class CircleButton(MaterialButton):

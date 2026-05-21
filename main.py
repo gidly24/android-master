@@ -6,7 +6,7 @@ from kivy.config import Config
 
 
 def load_env_file():
-    env_path = Path(__file__).parent / ".env"
+    env_path = Path(__file__).parent / "config.env"
     if env_path.exists():
         with open(env_path) as f:
             for line in f:
@@ -60,7 +60,11 @@ class TaskControlApp(App):
 
         try:
             self.ai_assistant = AIAssistant(task_service=self.service)
-        except ValueError:
+        except ValueError as e:
+            print(f"Error initializing AI Assistant: {e}") # Log the error
+            self.ai_assistant = None # Ensure it's None if initialization fails
+        except Exception as e:
+            print(f"An unexpected error occurred during AI Assistant initialization: {e}")
             self.ai_assistant = None
 
         self.chat_modal = ChatModal(
@@ -110,6 +114,48 @@ class TaskControlApp(App):
     def _force_layout_pass(self, *_):
         if hasattr(self.root_widget, "do_layout"):
             self.root_widget.do_layout()
+
+    # --- Свайпы для перехода между экранами ---
+    def on_touch_down(self, touch):
+        if self.screen_manager:
+            # Сначала сохраняем точку старта в touch.ud (пользовательские данные касания)
+            touch.ud['start_x'] = touch.x
+            touch.ud['is_swiping'] = True
+        return super().on_touch_down(touch)  # Передаем виджетам БЕЗ прерывания метода
+
+    def on_touch_move(self, touch):
+        if self.screen_manager and 'start_x' in touch.ud and touch.ud['is_swiping']:
+            move_x = touch.x - touch.ud['start_x']
+            # Если это явный горизонтальный жест (свайп длиннее 10dp и шире, чем выше)
+            if abs(move_x) > dp(10) and abs(move_x) > abs(touch.dy):
+                # Перехватываем управление у ScrollView, чтобы список не дергался по вертикали
+                return True
+        return super().on_touch_move(touch)
+
+    def on_touch_up(self, touch):
+        if not self.screen_manager or 'start_x' not in touch.ud or not touch.ud['is_swiping']:
+            return super().on_touch_up(touch)
+
+        move_x = touch.x - touch.ud['start_x']
+        swipe_threshold = dp(70)  # Увеличим порог, чтобы не было ложных срабатываний
+        current_screen_name = self.screen_manager.current
+
+        # Свайп вправо (движение пальца слева направо) -> открываем архив
+        if move_x > swipe_threshold and current_screen_name == 'tasks':
+            self.screen_manager.transition.direction = 'right'
+            self.screen_manager.current = 'archive'
+            touch.ud['is_swiping'] = False
+            return True
+
+        # Свайп влево (движение пальца справа налево) -> возвращаемся к задачам
+        elif move_x < -swipe_threshold and current_screen_name == 'archive':
+            self.screen_manager.transition.direction = 'left'
+            self.screen_manager.current = 'tasks'
+            touch.ud['is_swiping'] = False
+            return True
+
+        touch.ud['is_swiping'] = False
+        return super().on_touch_up(touch)
 
 
 if __name__ == "__main__":

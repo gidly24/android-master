@@ -7,7 +7,7 @@ ui/__pycache__/
 *.pyd
 
 tasks.db
-.env
+config.env
 .env.local
 post_layout0001.png
 ui_check.png

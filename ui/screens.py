@@ -33,10 +33,10 @@ from ui.components import (
 )
 from ui.forms import TaskFormPopup
 
-EDIT_ICON = "assets/icons/edit.ico"
-DONE_ICON = "assets/icons/done.ico"
-DELETE_ICON = "assets/icons/delete.ico"
-MORE_ICON = "assets/icons/more.ico"
+EDIT_ICON = "assets/icons/edit.png"
+DONE_ICON = "assets/icons/done.png"
+DELETE_ICON = "assets/icons/delete.png"
+MORE_ICON = "assets/icons/more.png"
 
 
 class TaskRow(MaterialCard):
@@ -152,8 +152,8 @@ class TaskRow(MaterialCard):
         actions.add_widget(e)
         actions.add_widget(c)
         actions.add_widget(d)
+        self.actions = actions
         self.add_widget(actions)
-
 
 class TaskListScreen(Screen):
     def __init__(self, service, on_tasks_changed=None, on_open_chat=None, **kwargs):
@@ -237,7 +237,7 @@ class TaskListScreen(Screen):
         add_btn = CircleButton(text="+", fill_color=M3_PRIMARY, text_color=TEXT_PRIMARY)
         add_btn.bind(on_release=lambda *_: self.open_task_form())
         chat_btn = IconCircleButton(
-            icon_source="assets/icons/chat.ico",
+            icon_source="assets/icons/chat.png",
             fallback_text="💬",
             fill_color=M3_PRIMARY,
             text_color=TEXT_PRIMARY
