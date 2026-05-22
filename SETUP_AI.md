@@ -20,7 +20,7 @@
 
 ### 2. Настроить переменные окружения
 
-Отредактируйте файл `.env` в корне проекта:
+Отредактируйте файл `config.env` в корне проекта:
 
 ```bash
 GOOGLE_API_KEY=твой_ключ_здесь
@@ -88,5 +88,5 @@ pip install -r requirements.txt
 ## Файлы
 
 - `ai_assistant.py` — класс для работы с Gemini API
-- `.env` — конфиг с API ключом (не коммитить в git!)
+- `config.env` — конфиг с API ключом (не коммитить в git!)
 - `ui/chat_screen.py` — UI чата
