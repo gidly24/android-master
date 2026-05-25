@@ -35,6 +35,7 @@ from kivy.app import App
 from kivy.clock import Clock
 from kivy.core.window import Window
 from kivy.metrics import dp
+from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.screenmanager import SlideTransition, ScreenManager
 from kivy.utils import platform
 
@@ -42,7 +43,13 @@ from ai_assistant import AIAssistant
 from database import DatabaseManager
 from services import TaskService
 from ui.chat_screen import ChatModal
-from ui.components import APP_BACKGROUND, MaterialRoot
+from ui.components import (
+    APP_BACKGROUND,
+    M3_PRIMARY,
+    POPUP_SURFACE,
+    MaterialButton,
+    MaterialRoot,
+)
 from ui.screens import ArchiveScreen, TaskListScreen
 
 
@@ -50,6 +57,7 @@ class TaskControlApp(App):
     def build(self):
         self.title = "Task Control"
         Window.clearcolor = APP_BACKGROUND
+        Window.softinput_mode = "below_target"
         if platform not in ("android", "ios"):
             Window.size = (430, 780)
 
@@ -75,10 +83,48 @@ class TaskControlApp(App):
         self.screen_manager = None
 
         root = MaterialRoot(orientation="vertical", spacing=dp(0), padding=dp(0))
+        
+        # --- Табы ---
+        tabs = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(2))
+        self.tasks_tab = MaterialButton(
+            text="Задачи", 
+            fill_color=M3_PRIMARY, 
+            radius=0,
+            height=dp(48)
+        )
+        self.archive_tab = MaterialButton(
+            text="Архив", 
+            fill_color=POPUP_SURFACE, 
+            radius=0,
+            height=dp(48)
+        )
+        self.tasks_tab.bind(on_release=lambda *_: self.switch_screen("tasks"))
+        self.archive_tab.bind(on_release=lambda *_: self.switch_screen("archive"))
+        tabs.add_widget(self.tasks_tab)
+        tabs.add_widget(self.archive_tab)
+        root.add_widget(tabs)
+
         screens = self._build_screens()
         root.add_widget(screens)
         self.root_widget = root
         return root
+
+    def switch_screen(self, name):
+        if self.screen_manager.current == name:
+            return
+        
+        direction = "left" if name == "archive" else "right"
+        self.screen_manager.transition.direction = direction
+        self.screen_manager.current = name
+        self._update_tab_colors(name)
+
+    def _update_tab_colors(self, current_name):
+        if current_name == "tasks":
+            self.tasks_tab.set_palette(fill_color=M3_PRIMARY)
+            self.archive_tab.set_palette(fill_color=POPUP_SURFACE)
+        else:
+            self.tasks_tab.set_palette(fill_color=POPUP_SURFACE)
+            self.archive_tab.set_palette(fill_color=M3_PRIMARY)
 
     def on_start(self):
         Clock.schedule_once(self._force_layout_pass, 0)
@@ -92,16 +138,26 @@ class TaskControlApp(App):
             on_tasks_changed=self.refresh_all_screens,
             on_open_chat=self.open_chat_modal,
         )
-        self.archive_screen = ArchiveScreen(name="archive", service=self.service, on_clear_all=self.clear_archive)
+        self.archive_screen = ArchiveScreen(
+            name="archive", 
+            service=self.service, 
+            on_clear_all=self.clear_archive,
+            on_tasks_changed=self.refresh_all_screens
+        )
         self.screen_manager.add_widget(self.task_list_screen)
         self.screen_manager.add_widget(self.archive_screen)
         return self.screen_manager
 
     def refresh_all_screens(self):
+        # Очищаем выделение при глобальном обновлении (например, после ИИ)
+        self.task_list_screen.selected_task_ids.clear()
+        self.task_list_screen._update_batch_actions_visibility()
+        self.archive_screen.selected_task_ids.clear()
+        self.archive_screen._update_batch_actions_visibility()
+        
         current = self.screen_manager.current
         self.task_list_screen.refresh_tasks()
-        if current == "archive":
-            self.archive_screen.refresh_archive()
+        self.archive_screen.refresh_archive()
 
     def clear_archive(self):
         self.service.clear_archived_tasks()
@@ -142,15 +198,13 @@ class TaskControlApp(App):
 
         # Свайп вправо (движение пальца слева направо) -> открываем архив
         if move_x > swipe_threshold and current_screen_name == 'tasks':
-            self.screen_manager.transition.direction = 'right'
-            self.screen_manager.current = 'archive'
+            self.switch_screen("archive")
             touch.ud['is_swiping'] = False
             return True
 
         # Свайп влево (движение пальца справа налево) -> возвращаемся к задачам
         elif move_x < -swipe_threshold and current_screen_name == 'archive':
-            self.screen_manager.transition.direction = 'left'
-            self.screen_manager.current = 'tasks'
+            self.switch_screen("tasks")
             touch.ud['is_swiping'] = False
             return True
 

@@ -148,6 +148,14 @@ class TaskService:
     def delete_task(self, task_id: int):
         self.database.delete_task(task_id)
 
+    def restore_task(self, task_id: int):
+        task = self.database.get_task(task_id)
+        if task:
+            task.status = "активна"
+            task.is_archived = 0
+            task.archived_at = None
+            self.database.update_task(task)  # или отдельный restore_task в database
+
     def clear_archived_tasks(self):
         self.database.clear_archived_tasks()
 

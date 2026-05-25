@@ -6,6 +6,7 @@ from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.modalview import ModalView
 from kivy.uix.scrollview import ScrollView
 from kivy.uix.widget import Widget
+from kivy.core.window import Window
 
 from ui.components import (
     APP_BACKGROUND,
@@ -104,6 +105,68 @@ class ChatModal(ModalView):
         self.scroll = ScrollView()
         self.messages = BoxLayout(orientation="vertical", spacing=dp(8), size_hint_y=None, padding=(0, 0, 0, dp(6)))
         self.messages.bind(minimum_height=self.messages.setter("height"))
+        self.scroll.bind(size=self._handle_window_resize, pos=self._handle_window_resize)
+        Clock.schedule_once(self._handle_window_resize, 0)
+
+    # Correctly defined _handle_window_resize method
+    def _handle_window_resize(self, *args):
+        # This method handles layout adjustments when the window resizes,
+        # which is crucial for handling the soft keyboard on Android.
+        
+        # Calculate available height for messages.
+        # We need to ensure that the composer and status bar are accounted for.
+        # Assuming self.composer and self.status are initialized.
+        composer_height = getattr(self, 'composer', None)
+        if composer_height:
+            composer_height = composer_height.height
+        else:
+            # Fallback to default composer height if not yet initialized or found
+            composer_height = dp(46) 
+
+        status_height = getattr(self, 'status', None)
+        if status_height:
+            status_height = status_height.height
+        else:
+            # Fallback to default status height
+            status_height = dp(14)
+
+        # Adjust the height of the messages BoxLayout to fill the remaining space.
+        # We subtract the composer and status heights from the total available height.
+        # Ensure self.messages is not None.
+        if self.messages and hasattr(self.messages, 'height'):
+            # Get the available height. On mobile, Window.height is usually correct.
+            # If ModalView has a specific height, it might be better to use root.height.
+            # Let's try to use root.height as it's within the modal.
+            available_height = self.height - composer_height - status_height - dp(20) # Added some padding/margin
+            
+            # Set height for messages, ensuring it doesn't exceed the available space.
+            self.messages.height = max(dp(100), available_height) # Ensure minimum height
+            self.messages.size_hint_y = None # Must be None to use explicit height
+        
+        # Scroll to bottom after resize
+        Clock.schedule_once(self._scroll_bottom, 0.05)
+
+
+    def _build_ui(self):
+        root = MaterialCard(
+            orientation="vertical",
+            spacing=dp(8),
+            padding=(dp(10), dp(10), dp(10), dp(10)),
+            fill_color=POPUP_SURFACE,
+        )
+
+        title_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(6))
+        title = Label(text="AI чат", color=TEXT_PRIMARY, font_size=FONT_SIZE, bold=True, halign="left", valign="middle")
+        title.bind(size=lambda *_: setattr(title, "text_size", title.size))
+        close_btn = MaterialButton(text="Закрыть", size_hint_x=None, width=dp(82), height=dp(36))
+        close_btn.bind(on_release=lambda *_: self.dismiss())
+        title_row.add_widget(title)
+        title_row.add_widget(close_btn)
+        root.add_widget(title_row)
+
+        self.scroll = ScrollView()
+        self.messages = BoxLayout(orientation="vertical", spacing=dp(8), size_hint_y=None, padding=(0, 0, 0, dp(6)))
+        self.messages.bind(minimum_height=self.messages.setter("height"))
         self.scroll.add_widget(self.messages)
         root.add_widget(self.scroll)
 
@@ -118,8 +181,10 @@ class ChatModal(ModalView):
         self.send_btn.bind(on_release=lambda *_: self.send_message())
         composer.add_widget(self.input)
         composer.add_widget(self.send_btn)
+        self.composer = composer # Assign composer to self
         root.add_widget(composer)
         self.add_widget(root)
+
 
     def send_message(self, preset_text=None):
         if self._busy:

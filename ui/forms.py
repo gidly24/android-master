@@ -211,6 +211,11 @@ class TaskFormPopup(ModalView):
         self.priority_spinner.text = (self.task.priority or PRIORITY_OPTIONS[1]).capitalize()
 
     def _save(self):
+        recurrence = self.recurrence_spinner.text.lower()
+        due_date = self.due_date_input.text.strip()
+        if recurrence != "одноразовая" and not due_date:
+            from datetime import date
+            self.due_date_input.text = date.today().isoformat()
         task_data = {
             "title": self.title_input.text,
             "description": self.description_input.text,

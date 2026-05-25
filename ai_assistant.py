@@ -13,7 +13,7 @@ class AIAssistant:
         if not self.api_key:
             raise ValueError("GOOGLE_API_KEY not set. Set the environment variable.")
 
-        self.api_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent"
+        self.api_url = f"{os.getenv('GOOGLE_GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com')}/v1beta/models/gemini-2.5-flash-lite:generateContent"
         self.task_service = task_service # Store the TaskService instance
         self.today_date = date.today().isoformat()
 

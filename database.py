@@ -223,6 +223,17 @@ class DatabaseManager:
         with self._connect() as connection:
             connection.execute("DELETE FROM tasks WHERE is_archived = 1")
 
+    def restore_task(self, task_id: int):
+        with self._connect() as connection:
+            connection.execute(
+                """
+                UPDATE tasks
+                SET is_archived = 0, archived_at = NULL, status = 'активна', updated_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (task_id,),
+            )
+
     def get_task(self, task_id: int):
         with self._connect() as connection:
             row = connection.execute("SELECT * FROM tasks WHERE id = ?", (task_id,)).fetchone()
