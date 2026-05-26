@@ -1,4 +1,4 @@
-from kivy.graphics import Color, Ellipse
+from kivy.graphics import Color, Ellipse, RoundedRectangle
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
 from kivy.uix.button import Button
@@ -36,6 +36,68 @@ from ui.components import (
     bind_text_size,
 )
 from ui.forms import TaskFormPopup
+
+
+class FilterModal(ModalView):
+    def __init__(self, on_apply_filters, current_status_filter, current_category_filter, **kwargs):
+        super().__init__(**kwargs)
+        self.on_apply_filters = on_apply_filters
+        self.current_status_filter = current_status_filter
+        self.current_category_filter = current_category_filter
+
+        self.size_hint = (0.9, 0.6)
+        self.background_color = TRANSPARENT_APP
+        self.separator_height = 0
+        self.auto_dismiss = True
+
+        self.content_layout = BoxLayout(orientation='vertical', spacing=dp(10), padding=dp(20),
+                                        size_hint=(1, 1))
+        with self.content_layout.canvas.before:
+            Color(*POPUP_SURFACE)
+            self.rect = RoundedRectangle(size=self.content_layout.size, pos=self.content_layout.pos, radius=[dp(16)])
+        self.content_layout.bind(pos=self.update_rect, size=self.update_rect)
+
+        # Status Filter
+        status_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
+        status_row.add_widget(Label(text="Статус:", font_size=FONT_SIZE, bold=True, size_hint_x=None, width=dp(100), halign="left"))
+        self.status_spinner = MaterialSpinner(
+            text=self.current_status_filter.capitalize(),
+            values=("Все", "Активные", "Выполненные", "Просроченные"),
+            height=dp(36),
+            radius=dp(18)
+        )
+        status_row.add_widget(self.status_spinner)
+        self.content_layout.add_widget(status_row)
+
+        # Category Filter
+        cat_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
+        cat_row.add_widget(Label(text="Категория:", font_size=FONT_SIZE, bold=True, size_hint_x=None, width=dp(100), halign="left"))
+        cat_values = ["Все"] + [c.capitalize() for c in CATEGORIES]
+        self.category_spinner = MaterialSpinner(
+            text=self.current_category_filter.capitalize(),
+            values=tuple(cat_values),
+            height=dp(36),
+            radius=dp(18)
+        )
+        cat_row.add_widget(self.category_spinner)
+        self.content_layout.add_widget(cat_row)
+
+        # Apply Button
+        apply_button = FilledButton(text="Применить фильтры", size_hint_y=None, height=dp(48))
+        apply_button.bind(on_release=self._apply_filters_and_dismiss)
+        self.content_layout.add_widget(apply_button)
+
+        self.add_widget(self.content_layout)
+
+    def _apply_filters_and_dismiss(self, *args):
+        status = self.status_spinner.text.lower()
+        category = self.category_spinner.text.lower()
+        self.on_apply_filters(status, category)
+        self.dismiss()
+
+    def update_rect(self, instance, value):
+        self.rect.pos = instance.pos
+        self.rect.size = instance.size
 
 EDIT_ICON = "assets/icons/edit.png"
 DONE_ICON = "assets/icons/done.png"
@@ -232,8 +294,8 @@ class TaskListScreen(Screen):
         self.on_tasks_changed = on_tasks_changed
         self.on_open_chat = on_open_chat
         self.selected_task_ids = set()
-        self.status_filter = "активные"
-        self.category_filter = "все"
+        self.status_filter = "все"  # Initial filter value
+        self.category_filter = "все"  # Initial filter value
         self.search_text = ""
 
         self.root_layout = RelativeLayout()
@@ -241,16 +303,28 @@ class TaskListScreen(Screen):
 
         # --- Header ---
         header = BoxLayout(size_hint_y=None, height=dp(56), padding=(dp(16), 0, dp(16), 0))
+        # Add More button
+        self.more_button = IconCircleButton(
+            icon_source=MORE_ICON,
+            fallback_text="...",
+            size_hint=(None, None),
+            size=(dp(40), dp(40)),
+            fill_color=M3_PRIMARY,
+            text_color=TEXT_PRIMARY,
+            font_size="20sp"
+        )
+        self.more_button.bind(on_release=self.open_filter_modal)
+        header.add_widget(self.more_button)
+
         header.add_widget(Label(
             text="Мои задачи", 
             font_size=FONT_SIZE, 
             bold=True, 
             halign="left", 
             valign="middle",
-            size_hint_x=None,
-            width=dp(150)
+            size_hint_x=1 # Changed to 1 to take available space
         ))
-        header.add_widget(Widget())
+        header.add_widget(Widget()) # Removed extra widget, adjust as needed for spacing
         self.main_container.add_widget(header)
 
         # --- Search Bar ---
@@ -260,36 +334,7 @@ class TaskListScreen(Screen):
         search_bar.add_widget(self.search_input)
         self.main_container.add_widget(search_bar)
 
-        # --- Embedded Filters ---
-        filters_box = BoxLayout(orientation='vertical', size_hint_y=None, spacing=dp(4), padding=(dp(16), dp(4), dp(16), dp(8)))
-        
-        status_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
-        status_row.add_widget(Label(text="Статус:", font_size=FONT_SIZE, bold=True, size_hint_x=None, width=dp(100), halign="left"))
-        self.status_spinner = MaterialSpinner(
-            text=self.status_filter.capitalize(),
-            values=("Все", "Активные", "Выполненные", "Просроченные"),
-            height=dp(36),
-            radius=dp(18)
-        )
-        self.status_spinner.bind(text=self.on_filter_change)
-        status_row.add_widget(self.status_spinner)
-        filters_box.add_widget(status_row)
-
-        cat_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
-        cat_row.add_widget(Label(text="Категория:", font_size=FONT_SIZE, bold=True, size_hint_x=None, width=dp(100), halign="left"))
-        cat_values = ["Все"] + [c.capitalize() for c in CATEGORIES]
-        self.category_spinner = MaterialSpinner(
-            text=self.category_filter.capitalize(),
-            values=tuple(cat_values),
-            height=dp(36),
-            radius=dp(18)
-        )
-        self.category_spinner.bind(text=self.on_filter_change)
-        cat_row.add_widget(self.category_spinner)
-        filters_box.add_widget(cat_row)
-
-        filters_box.height = dp(88)
-        self.main_container.add_widget(filters_box)
+        # --- Removed Embedded Filters ---
 
         self.scroll = ScrollView(do_scroll_x=False)
         self.task_list_layout = BoxLayout(orientation='vertical', spacing=dp(10), size_hint_y=None, padding=dp(10))
@@ -348,16 +393,37 @@ class TaskListScreen(Screen):
         self.root_layout.add_widget(fabs)
 
         self.add_widget(self.root_layout)
+        self.refresh_tasks() # Call without filters initially
+
+        # Initialize FilterModal
+        self.filter_modal = FilterModal(
+            on_apply_filters=self._apply_filters_from_modal,
+            current_status_filter=self.status_filter,
+            current_category_filter=self.category_filter
+        )
+
+    def open_filter_modal(self, *args):
+        # Update modal with current filters before opening
+        self.filter_modal.current_status_filter = self.status_filter
+        self.filter_modal.current_category_filter = self.category_filter
+        self.filter_modal.status_spinner.text = self.status_filter.capitalize()
+        self.filter_modal.category_spinner.text = self.category_filter.capitalize()
+        self.filter_modal.open()
+
+    def _apply_filters_from_modal(self, status, category):
+        self.status_filter = status
+        self.category_filter = category
         self.refresh_tasks()
 
     def on_search_change(self, instance, value):
         self.search_text = value
         self.refresh_tasks()
 
-    def on_filter_change(self, instance, value):
-        self.status_filter = self.status_spinner.text.lower()
-        self.category_filter = self.category_spinner.text.lower()
-        self.refresh_tasks()
+    # Remove on_filter_change as it's now handled by the modal
+    # def on_filter_change(self, instance, value):
+    #     self.status_filter = self.status_spinner.text.lower()
+    #     self.category_filter = self.category_spinner.text.lower()
+    #     self.refresh_tasks()
 
     def refresh_tasks(self):
         self.task_list_layout.clear_widgets()
