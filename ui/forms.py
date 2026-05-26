@@ -43,8 +43,8 @@ class TaskFormPopup(ModalView):
     def _build_content(self):
         root = MaterialCard(
             orientation="vertical",
-            spacing=dp(10),
-            padding=(dp(16), dp(16), dp(16), dp(14)),
+            spacing=dp(16),
+            padding=dp(16),
             fill_color=POPUP_SURFACE,
         )
 
@@ -63,7 +63,7 @@ class TaskFormPopup(ModalView):
         root.add_widget(title)
 
         scroll = ScrollView()
-        form = BoxLayout(orientation="vertical", spacing=dp(10), size_hint_y=None)
+        form = BoxLayout(orientation="vertical", spacing=dp(16), size_hint_y=None)
         form.bind(minimum_height=form.setter("height"))
 
         self.title_input = MaterialTextInput(multiline=False, hint_text="Название задачи")

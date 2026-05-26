@@ -88,22 +88,23 @@ class ChatModal(ModalView):
     def _build_ui(self):
         root = MaterialCard(
             orientation="vertical",
-            spacing=dp(8),
-            padding=(dp(10), dp(10), dp(10), dp(10)),
+            spacing=dp(16),
+            padding=dp(16),
             fill_color=POPUP_SURFACE,
         )
 
-        title_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(6))
-        title = Label(text="AI чат", color=TEXT_PRIMARY, font_size=FONT_SIZE, bold=True, halign="left", valign="middle")
-        title.bind(size=lambda *_: setattr(title, "text_size", title.size))
-        close_btn = MaterialButton(text="Закрыть", size_hint_x=None, width=dp(82), height=dp(36))
-        close_btn.bind(on_release=lambda *_: self.dismiss())
+        title_row = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(16), padding=dp(0))
+        title = Label(text="AI чат", color=TEXT_PRIMARY, font_size=FONT_SIZE, bold=True, halign="left", valign="middle", size_hint_x=None)
+        bind_text_size(title)
         title_row.add_widget(title)
+        title_row.add_widget(Widget())
+        close_btn = MaterialButton(text="X", size_hint=(None, None), width=dp(40), height=dp(40))
+        close_btn.bind(on_release=lambda *_: self.dismiss())
         title_row.add_widget(close_btn)
         root.add_widget(title_row)
 
         self.scroll = ScrollView()
-        self.messages = BoxLayout(orientation="vertical", spacing=dp(8), size_hint_y=None, padding=(0, 0, 0, dp(6)))
+        self.messages = BoxLayout(orientation="vertical", spacing=dp(16), size_hint_y=None, padding=(0, 0, 0, dp(16)))
         self.messages.bind(minimum_height=self.messages.setter("height"))
         self.scroll.bind(size=self._handle_window_resize, pos=self._handle_window_resize)
         Clock.schedule_once(self._handle_window_resize, 0)
@@ -150,22 +151,23 @@ class ChatModal(ModalView):
     def _build_ui(self):
         root = MaterialCard(
             orientation="vertical",
-            spacing=dp(8),
-            padding=(dp(10), dp(10), dp(10), dp(10)),
+            spacing=dp(16),
+            padding=dp(16),
             fill_color=POPUP_SURFACE,
         )
 
-        title_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(6))
-        title = Label(text="AI чат", color=TEXT_PRIMARY, font_size=FONT_SIZE, bold=True, halign="left", valign="middle")
-        title.bind(size=lambda *_: setattr(title, "text_size", title.size))
-        close_btn = MaterialButton(text="Закрыть", size_hint_x=None, width=dp(82), height=dp(36))
-        close_btn.bind(on_release=lambda *_: self.dismiss())
+        title_row = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(16), padding=dp(0))
+        title = Label(text="AI чат", color=TEXT_PRIMARY, font_size=FONT_SIZE, bold=True, halign="left", valign="middle", size_hint_x=None)
+        bind_text_size(title)
         title_row.add_widget(title)
+        title_row.add_widget(Widget())
+        close_btn = MaterialButton(text="X", size_hint=(None, None), width=dp(40), height=dp(40))
+        close_btn.bind(on_release=lambda *_: self.dismiss())
         title_row.add_widget(close_btn)
         root.add_widget(title_row)
 
         self.scroll = ScrollView()
-        self.messages = BoxLayout(orientation="vertical", spacing=dp(8), size_hint_y=None, padding=(0, 0, 0, dp(6)))
+        self.messages = BoxLayout(orientation="vertical", spacing=dp(16), size_hint_y=None, padding=(0, 0, 0, dp(16)))
         self.messages.bind(minimum_height=self.messages.setter("height"))
         self.scroll.add_widget(self.messages)
         root.add_widget(self.scroll)

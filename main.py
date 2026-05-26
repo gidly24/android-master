@@ -82,7 +82,7 @@ class TaskControlApp(App):
         )
         self.screen_manager = None
 
-        root = MaterialRoot(orientation="vertical", spacing=dp(0), padding=dp(0))
+        root = MaterialRoot(orientation="vertical", spacing=dp(16), padding=dp(16))
         
         # --- Табы ---
         tabs = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(2))
