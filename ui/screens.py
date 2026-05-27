@@ -52,7 +52,7 @@ class FilterModal(ModalView):
         self.auto_dismiss = True
 
         main_layout = BoxLayout(orientation='vertical', spacing=dp(0), padding=dp(16), size_hint=(1, 1))
-        
+
         with main_layout.canvas.before:
             Color(*POPUP_SURFACE)
             self.rect = RoundedRectangle(size=main_layout.size, pos=main_layout.pos, radius=[dp(20)])
@@ -69,7 +69,7 @@ class FilterModal(ModalView):
         main_layout.add_widget(header)
 
         content = BoxLayout(orientation='vertical', spacing=dp(16), padding=dp(0), size_hint_y=None)
-        
+
         status_row = BoxLayout(size_hint_y=None, height=dp(40), spacing=dp(8))
         status_row.add_widget(Label(text="Статус:", font_size=FONT_SIZE, bold=True, size_hint_x=None, width=dp(80), halign="left"))
         self.status_spinner = MaterialSpinner(
@@ -94,7 +94,7 @@ class FilterModal(ModalView):
         )
         cat_row.add_widget(self.category_spinner)
         content.add_widget(cat_row)
-        
+
         main_layout.add_widget(content)
 
         button_row = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(16), padding=dp(0))
@@ -129,6 +129,7 @@ DONE_ICON = "assets/icons/done.png"
 DELETE_ICON = "assets/icons/delete.png"
 MORE_ICON = "assets/icons/more.png"
 RESTORE_ICON = "assets/icons/restore.png"
+CLEAN_ICON = "assets/icons/clean.png"
 CHAT_ICON = "assets/icons/chat.png"
 
 
@@ -141,7 +142,7 @@ class SelectionToggle(Widget):
             self._bg = Ellipse(pos=self.pos, size=self.size)
             self._inner_color = Color(*APP_BACKGROUND)
             self._inner = Ellipse(
-                pos=(self.x + dp(2), self.y + dp(2)), 
+                pos=(self.x + dp(2), self.y + dp(2)),
                 size=(dp(30), dp(30))
             )
         self.bind(pos=self._update_canvas, size=self._update_canvas)
@@ -199,17 +200,17 @@ class TaskRow(MaterialCard):
 
         self.selector = SelectionToggle(is_selected=self.is_selected)
         selector_btn = Button(
-            size_hint=(None, None), 
+            size_hint=(None, None),
             size=(dp(34), dp(34)),
             background_color=(0,0,0,0)
         )
         selector_btn.add_widget(self.selector)
         self.selector.pos = (selector_btn.x + dp(5), selector_btn.y + dp(5))
         selector_btn.bind(pos=lambda *_: setattr(self.selector, 'pos', (selector_btn.x + dp(5), selector_btn.y + dp(5))))
-        
+
         if self.on_select:
             selector_btn.bind(on_release=lambda *_: self.on_select(self.task.id))
-        
+
         top_row.add_widget(selector_btn)
 
         t = Label(text=self.task.title, color=TEXT_PRIMARY, size_hint_y=None, halign="left", valign="middle", font_size=FONT_SIZE, bold=True)
@@ -218,10 +219,10 @@ class TaskRow(MaterialCard):
         top_row.add_widget(t)
 
         top_row.add_widget(Widget(size_hint_x=1))
-        
+
         status_chip = Chip(text=self.task.status.capitalize())
         top_row.add_widget(status_chip)
-        
+
         card_content_layout.add_widget(top_row)
 
         category = Label(
@@ -265,9 +266,9 @@ class TaskRow(MaterialCard):
 
         action_size = dp(38)
         actions = BoxLayout(size_hint_y=None, height=action_size, spacing=dp(6))
-        
+
         actions.add_widget(Widget())
-        
+
         if not self.is_archive:
             e = IconCircleButton(
                 icon_source=EDIT_ICON,
@@ -294,7 +295,7 @@ class TaskRow(MaterialCard):
         )
         c.bind(on_release=lambda *_: self.on_complete(self.task.id))
         actions.add_widget(c)
-        
+
         d = IconCircleButton(
             icon_source=DELETE_ICON,
             fallback_text="У",
@@ -311,7 +312,6 @@ class TaskRow(MaterialCard):
         self.add_widget(card_content_layout)
         self.add_widget(actions)
 
-
 class TaskListScreen(Screen):
     def __init__(self, service, on_tasks_changed, on_open_chat, **kwargs):
         super().__init__(**kwargs)
@@ -319,84 +319,82 @@ class TaskListScreen(Screen):
         self.on_tasks_changed = on_tasks_changed
         self.on_open_chat = on_open_chat
         self.selected_task_ids = set()
-        self.status_filter = "все"  # Initial filter value
-        self.category_filter = "все"  # Initial filter value
+        self.status_filter = "все"
+        self.category_filter = "все"
         self.search_text = ""
 
         self.root_layout = RelativeLayout()
         self.main_container = BoxLayout(orientation='vertical', padding=dp(16), spacing=dp(16))
 
-        # --- Header ---
-        header = BoxLayout(size_hint_y=None, height=dp(56), padding=dp(16), spacing=dp(16))
+        # --- Заголовок ---
+        header = BoxLayout(size_hint_y=None, height=dp(72), padding=(dp(16), dp(8)), spacing=dp(12))
         title_label = Label(
-            text="Мои задачи", 
-            font_size=FONT_SIZE, 
-            bold=True, 
-            halign="left", 
+            text="Мои задачи",
+            font_size=FONT_SIZE,
+            bold=True,
+            halign="left",
             valign="middle",
-            size_hint_x=None
+            size_hint_x=1
         )
         bind_text_size(title_label)
         header.add_widget(title_label)
-        header.add_widget(Widget())
-        self.main_container.add_widget(header)
-        
-        # Add More button to RelativeLayout
-        # More button (was self.more_button)
-        self.more_button = IconCircleButton(
-            icon_source=MORE_ICON,
-            fallback_text="...",
+
+        self.header_actions = BoxLayout(
+            orientation='horizontal',
             size_hint=(None, None),
-            size=(dp(40), dp(40)),
-            fill_color=M3_PRIMARY,
-            text_color=TEXT_PRIMARY,
-            font_size="20sp",
-            pos_hint={'right': 0.98, 'top': 0.98}
+            size=(dp(204), dp(56)),
+            spacing=dp(12),
         )
-        self.more_button.bind(on_release=self.open_filter_modal)
-        self.root_layout.add_widget(self.more_button)
-        
-        # Create a layout for the action buttons that appear near the more button
-        self.action_buttons_layout = BoxLayout(
-            orientation='horizontal', 
-            size_hint=(None, None), 
-            size=(dp(124), dp(56)), 
-            spacing=dp(12), 
-            pos_hint={'right': 0.95, 'top': 0.12}
-        )
-        
-        # Complete selected tasks button
-        self.complete_selected_btn = CircleButton(
-            text="Г",
+
+        # Кнопка "Выполнить выделенные"
+        self.complete_selected_btn = IconCircleButton(
+            icon_source=DONE_ICON,
+            fallback_text="✓",
             size_hint=(None, None),
             size=(dp(56), dp(56)),
+            radius=dp(28),
             fill_color=M3_PRIMARY,
             text_color=TEXT_PRIMARY,
-            font_size="32sp"
+            font_size="24sp",
+            opacity=0,
+            disabled=True,
         )
         self.complete_selected_btn.bind(on_release=self.complete_selected)
-        self.complete_selected_btn.opacity = 0
-        self.complete_selected_btn.height = 0
-        
-        # Delete selected tasks button
-        self.delete_selected_btn = CircleButton(
-            text="У",
+
+        # Кнопка "Удалить выделенные"
+        self.delete_selected_btn = IconCircleButton(
+            icon_source=DELETE_ICON,
+            fallback_text="🗑",
             size_hint=(None, None),
             size=(dp(56), dp(56)),
+            radius=dp(28),
             fill_color=M3_PRIMARY,
             text_color=TEXT_PRIMARY,
-            font_size="32sp"
+            font_size="24sp",
+            opacity=0,
+            disabled=True,
         )
         self.delete_selected_btn.bind(on_release=self.delete_selected)
-        self.delete_selected_btn.opacity = 0
-        self.delete_selected_btn.height = 0
-        
-        # Add the action buttons to their layout
-        self.action_buttons_layout.add_widget(self.complete_selected_btn)
-        self.action_buttons_layout.add_widget(self.delete_selected_btn)
-        
-        # Add the action buttons layout to the root
-        self.root_layout.add_widget(self.action_buttons_layout)
+
+        self.more_button = IconCircleButton(
+            icon_source=MORE_ICON,
+            fallback_text="⋯",
+            size_hint=(None, None),
+            size=(dp(56), dp(56)),
+            radius=dp(28),
+            fill_color=M3_PRIMARY,
+            text_color=TEXT_PRIMARY,
+            font_size="24sp"
+        )
+        self.more_button.bind(on_release=self.open_filter_modal)
+
+        # Порядок слева направо: выполнить, удалить, фильтры
+        self.header_actions.add_widget(self.complete_selected_btn)
+        self.header_actions.add_widget(self.delete_selected_btn)
+        self.header_actions.add_widget(self.more_button)
+        header.add_widget(self.header_actions)
+        self.main_container.add_widget(header)
+
 
         # --- Search Bar ---
         search_bar = BoxLayout(size_hint_y=None, height=dp(48), padding=(dp(16), dp(4)), spacing=dp(8))
@@ -405,40 +403,18 @@ class TaskListScreen(Screen):
         search_bar.add_widget(self.search_input)
         self.main_container.add_widget(search_bar)
 
-        # --- Removed Embedded Filters ---
-
+        # --- ScrollView ---
         self.scroll = ScrollView(do_scroll_x=False)
         self.task_list_layout = BoxLayout(orientation='vertical', spacing=dp(16), size_hint_y=None, padding=dp(16))
         self.task_list_layout.bind(minimum_height=self.task_list_layout.setter('height'))
         self.scroll.add_widget(self.task_list_layout)
         self.main_container.add_widget(self.scroll)
 
-        # --- Batch Actions ---
-        # self.batch_actions = MaterialCard(
-        #     orientation="horizontal",
-        #     size_hint_y=None,
-        #     height=0,
-        #     opacity=0,
-        #     padding=dp(16),
-        #     spacing=dp(16),
-        #     fill_color=POPUP_SURFACE,
-        #     radius=0
-        # )
-        # btn_complete = FilledButton(text="Выполнить", size_hint_x=1, height=dp(40), font_size=FONT_SIZE, bold=True)
-        # btn_complete.bind(on_release=self.complete_selected)
-        # btn_delete = DangerButton(text="Удалить", size_hint_x=1, height=dp(40), font_size=FONT_SIZE, bold=True)
-        # btn_delete.bind(on_release=self.delete_selected)
-        # self.batch_actions.add_widget(btn_complete)
-        # self.batch_actions.add_widget(btn_delete)
-        # self.main_container.add_widget(self.batch_actions)
-
         self.root_layout.add_widget(self.main_container)
 
-        # --- FABs Group ---
+        # --- FABs (чат и добавление) ---
         fabs = BoxLayout(orientation='horizontal', size_hint=(None, None), size=(dp(124), dp(56)), spacing=dp(12), pos_hint={'right': 0.95, 'top': 0.12})
-
-        # screens.py
-        self.chat_fab = IconCircleButton(  # <--- Меняем на IconCircleButton
+        self.chat_fab = IconCircleButton(
             icon_source=CHAT_ICON,
             fallback_text="Ч",
             size_hint=(None, None),
@@ -448,7 +424,6 @@ class TaskListScreen(Screen):
             font_size="24sp"
         )
         self.chat_fab.bind(on_release=lambda *_: self.on_open_chat())
-        
         self.add_fab = CircleButton(
             text="+",
             size_hint=(None, None),
@@ -458,24 +433,20 @@ class TaskListScreen(Screen):
             font_size="32sp"
         )
         self.add_fab.bind(on_release=lambda *_: self.add_task())
-        
         fabs.add_widget(self.chat_fab)
         fabs.add_widget(self.add_fab)
         self.root_layout.add_widget(fabs)
 
-        self._update_batch_actions_visibility() # Ensure correct initial state
         self.add_widget(self.root_layout)
-        self.refresh_tasks() # Call without filters initially
-
-        # Initialize FilterModal
         self.filter_modal = FilterModal(
             on_apply_filters=self._apply_filters_from_modal,
             current_status_filter=self.status_filter,
             current_category_filter=self.category_filter
         )
+        self.refresh_tasks()
+        self._update_batch_actions_visibility()
 
     def open_filter_modal(self, *args):
-        # Update modal with current filters before opening
         self.filter_modal.current_status_filter = self.status_filter
         self.filter_modal.current_category_filter = self.category_filter
         self.filter_modal.status_spinner.text = self.status_filter.capitalize()
@@ -491,12 +462,6 @@ class TaskListScreen(Screen):
         self.search_text = value
         self.refresh_tasks()
 
-    # Remove on_filter_change as it's now handled by the modal
-    # def on_filter_change(self, instance, value):
-    #     self.status_filter = self.status_spinner.text.lower()
-    #     self.category_filter = self.category_spinner.text.lower()
-    #     self.refresh_tasks()
-
     def refresh_tasks(self):
         self.task_list_layout.clear_widgets()
         tasks = self.service.get_tasks(
@@ -504,7 +469,6 @@ class TaskListScreen(Screen):
             category_filter=self.category_filter,
             search_text=self.search_text
         )
-
         if not tasks:
             empty_label = Label(
                 text="Задач не найдено",
@@ -563,32 +527,24 @@ class TaskListScreen(Screen):
         self.refresh_tasks()
 
     def _update_batch_actions_visibility(self):
-        if hasattr(self, 'complete_selected_btn') and hasattr(self, 'delete_selected_btn'):
-            if self.selected_task_ids:
-                # Show the action buttons
-                self.complete_selected_btn.opacity = 1
-                self.complete_selected_btn.height = dp(56)
-                self.delete_selected_btn.opacity = 1
-                self.delete_selected_btn.height = dp(56)
-                # Keep the more button visible
-                self.more_button.opacity = 1
-                self.more_button.height = dp(40)
-            else:
-                # Hide the action buttons
-                self.complete_selected_btn.opacity = 0
-                self.complete_selected_btn.height = 0
-                self.delete_selected_btn.opacity = 0
-                self.delete_selected_btn.height = 0
-                # Keep the more button visible
-                self.more_button.opacity = 1
-                self.more_button.height = dp(40)
+        if self.selected_task_ids:
+            self.complete_selected_btn.opacity = 1
+            self.complete_selected_btn.disabled = False
+            self.delete_selected_btn.opacity = 1
+            self.delete_selected_btn.disabled = False
+        else:
+            self.complete_selected_btn.opacity = 0
+            self.complete_selected_btn.disabled = True
+            self.delete_selected_btn.opacity = 0
+            self.delete_selected_btn.disabled = True
+        self.more_button.opacity = 1
+        self.more_button.disabled = False
 
     def complete_selected(self, *args):
         for t_id in list(self.selected_task_ids):
             self.service.mark_task_done(t_id)
         self.selected_task_ids.clear()
         self.on_tasks_changed()
-        # Ensure the buttons are hidden after completion
         self._update_batch_actions_visibility()
 
     def delete_selected(self, *args):
@@ -596,7 +552,6 @@ class TaskListScreen(Screen):
             self.service.delete_task(t_id)
         self.selected_task_ids.clear()
         self.on_tasks_changed()
-        # Ensure the buttons are hidden after deletion
         self._update_batch_actions_visibility()
 
 
@@ -612,34 +567,76 @@ class ArchiveScreen(Screen):
         self.root_layout = RelativeLayout()
         self.main_container = BoxLayout(orientation='vertical', padding=dp(16), spacing=dp(16))
 
-        # --- Header ---
-        header = BoxLayout(size_hint_y=None, height=dp(56), padding=dp(16), spacing=dp(16))
+        # --- Заголовок ---
+        header = BoxLayout(size_hint_y=None, height=dp(72), padding=(dp(16), dp(8)), spacing=dp(12))
         title_label = Label(
-            text="Архив", 
-            font_size=FONT_SIZE, 
-            bold=True, 
-            halign="left", 
+            text="Архив",
+            font_size=FONT_SIZE,
+            bold=True,
+            halign="left",
             valign="middle",
-            size_hint_x=None
+            size_hint_x=1
         )
         bind_text_size(title_label)
         header.add_widget(title_label)
-        header.add_widget(Widget())
 
-        clear_btn = MaterialButton(
-            text="Очистить", 
-            size_hint=(None, None), 
-            width=dp(100), 
-            height=dp(36),
-            pos_hint={'center_y': 0.5},
+        self.header_actions = BoxLayout(
+            orientation='horizontal',
+            size_hint=(None, None),
+            size=(dp(204), dp(56)),
+            spacing=dp(12),
+        )
+
+        # Кнопка "Восстановить выделенные"
+        self.restore_selected_btn = IconCircleButton(
+            icon_source=RESTORE_ICON,
+            fallback_text="↺",
+            size_hint=(None, None),
+            size=(dp(56), dp(56)),
+            radius=dp(28),
             fill_color=M3_PRIMARY,
             text_color=TEXT_PRIMARY,
-            font_size=FONT_SIZE,
-            bold=True
+            font_size="24sp",
+            opacity=0,
+            disabled=True,
         )
-        clear_btn.bind(on_release=lambda *_: self.on_clear_all())
-        header.add_widget(clear_btn)
+        self.restore_selected_btn.bind(on_release=self.restore_selected)
+
+        # Кнопка "Удалить выделенные"
+        self.delete_selected_btn = IconCircleButton(
+            icon_source=DELETE_ICON,
+            fallback_text="🗑",
+            size_hint=(None, None),
+            size=(dp(56), dp(56)),
+            radius=dp(28),
+            fill_color=M3_PRIMARY,
+            text_color=TEXT_PRIMARY,
+            font_size="24sp",
+            opacity=0,
+            disabled=True,
+        )
+        self.delete_selected_btn.bind(on_release=self.delete_selected)
+
+        # Кнопка "Очистить архив" (всегда видна)
+        self.clear_all_btn = IconCircleButton(
+            icon_source=CLEAN_ICON,
+            fallback_text="✖",
+            size_hint=(None, None),
+            size=(dp(56), dp(56)),
+            radius=dp(28),
+            fill_color=M3_PRIMARY,
+            text_color=TEXT_PRIMARY,
+            font_size="24sp"
+        )
+        self.clear_all_btn.bind(on_release=lambda *_: self.on_clear_all())
+
+        # Порядок слева направо: восстановить, удалить, очистить архив
+        self.header_actions.add_widget(self.restore_selected_btn)
+        self.header_actions.add_widget(self.delete_selected_btn)
+        self.header_actions.add_widget(self.clear_all_btn)
+        header.add_widget(self.header_actions)
         self.main_container.add_widget(header)
+
 
         # --- Search Bar ---
         search_bar = BoxLayout(size_hint_y=None, height=dp(48), padding=(dp(16), dp(4)), spacing=dp(8))
@@ -654,28 +651,10 @@ class ArchiveScreen(Screen):
         self.scroll.add_widget(self.archive_list_layout)
         self.main_container.add_widget(self.scroll)
 
-        # --- Batch Actions ---
-        self.batch_actions = MaterialCard(
-            orientation="horizontal",
-            size_hint_y=None,
-            height=0,
-            opacity=0,
-            padding=dp(16),
-            spacing=dp(16),
-            fill_color=POPUP_SURFACE,
-            radius=0
-        )
-        btn_restore = FilledButton(text="Восстановить", size_hint_x=1, height=dp(40), font_size=FONT_SIZE, bold=True)
-        btn_restore.bind(on_release=self.restore_selected)
-        btn_delete = DangerButton(text="Удалить", size_hint_x=1, height=dp(40), font_size=FONT_SIZE, bold=True)
-        btn_delete.bind(on_release=self.delete_selected)
-        self.batch_actions.add_widget(btn_restore)
-        self.batch_actions.add_widget(btn_delete)
-        self.main_container.add_widget(self.batch_actions)
-
         self.root_layout.add_widget(self.main_container)
         self.add_widget(self.root_layout)
         self.refresh_archive()
+        self._update_batch_actions_visibility()
 
     def on_search_change(self, instance, value):
         self.search_text = value
@@ -684,7 +663,6 @@ class ArchiveScreen(Screen):
     def refresh_archive(self):
         self.archive_list_layout.clear_widgets()
         tasks = self.service.get_archived_tasks(search_text=self.search_text)
-
         if not tasks:
             empty_label = Label(
                 text="В архиве пусто",
@@ -729,36 +707,29 @@ class ArchiveScreen(Screen):
         self.refresh_archive()
 
     def _update_batch_actions_visibility(self):
-        if hasattr(self, 'complete_selected_btn') and hasattr(self, 'delete_selected_btn'):
-            if self.selected_task_ids:
-                # Show the action buttons
-                self.complete_selected_btn.opacity = 1
-                self.complete_selected_btn.height = dp(56)
-                self.delete_selected_btn.opacity = 1
-                self.delete_selected_btn.height = dp(56)
-                # Keep the more button visible
-                self.more_button.opacity = 1
-                self.more_button.height = dp(40)
-            else:
-                # Hide the action buttons
-                self.complete_selected_btn.opacity = 0
-                self.complete_selected_btn.height = 0
-                self.delete_selected_btn.opacity = 0
-                self.delete_selected_btn.height = 0
-                # Keep the more button visible
-                self.more_button.opacity = 1
-                self.more_button.height = dp(40)
+        if self.selected_task_ids:
+            self.restore_selected_btn.opacity = 1
+            self.restore_selected_btn.disabled = False
+            self.delete_selected_btn.opacity = 1
+            self.delete_selected_btn.disabled = False
+        else:
+            self.restore_selected_btn.opacity = 0
+            self.restore_selected_btn.disabled = True
+            self.delete_selected_btn.opacity = 0
+            self.delete_selected_btn.disabled = True
+        self.clear_all_btn.opacity = 1
+        self.clear_all_btn.disabled = False
 
     def restore_selected(self, *args):
         for t_id in list(self.selected_task_ids):
             self.service.restore_task(t_id)
         self.selected_task_ids.clear()
         self.on_tasks_changed()
+        self._update_batch_actions_visibility()
 
     def delete_selected(self, *args):
         for t_id in list(self.selected_task_ids):
             self.service.delete_task(t_id)
         self.selected_task_ids.clear()
         self.on_tasks_changed()
-        # Ensure the buttons are hidden after deletion
         self._update_batch_actions_visibility()
