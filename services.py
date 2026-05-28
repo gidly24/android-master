@@ -1,5 +1,6 @@
 from calendar import monthrange
 from datetime import date, datetime, time, timedelta
+from kivy.utils import platform
 
 from models import CATEGORIES, PRIORITY_OPTIONS, RECURRENCE_OPTIONS, Task
 
@@ -9,8 +10,9 @@ class TaskService:
 
     DEMO_DATA_STATE_KEY = "demo_data_initialized"
 
-    def __init__(self, database):
+    def __init__(self, database, notification_callback=None):
         self.database = database
+        self.notification_callback = notification_callback
 
     def initialize_demo_data(self):
         if self._is_demo_data_initialized():
@@ -140,12 +142,24 @@ class TaskService:
         )
 
         if task_id is None:
-            return self.database.create_task(task)
+            new_task_id = self.database.create_task(task)
+            # Планируем уведомления для новой задачи
+            if self.notification_callback and task.due_date:
+                self.notification_callback(new_task_id, task.title, task.due_date, task.due_time)
+            return new_task_id
 
+        # Для обновленных задач планируем уведомления, если есть due_date
         self.database.update_task(task)
+        if self.notification_callback and task.due_date:
+            self.notification_callback(task_id, task.title, task.due_date, task.due_time)
         return task_id
 
     def delete_task(self, task_id: int):
+        task = self.database.get_task(task_id)
+        if task:
+            # Отменяем уведомления перед удалением
+            if self.notification_callback:
+                self.notification_callback(task_id, task.title, task.due_date, task.due_time, "cancel")
         self.database.delete_task(task_id)
 
     def restore_task(self, task_id: int):
@@ -155,8 +169,16 @@ class TaskService:
             task.is_archived = 0
             task.archived_at = None
             self.database.update_task(task)  # или отдельный restore_task в database
+            # Планируем уведомления для восстановленной задачи
+            if self.notification_callback and task.due_date:
+                self.notification_callback(task_id, task.title, task.due_date, task.due_time)
 
     def clear_archived_tasks(self):
+        # Отменяем уведомления для всех архивных задач
+        if self.notification_callback:
+            archived_tasks = self.database.get_archived_tasks()
+            for task in archived_tasks:
+                self.notification_callback(task.id, task.title, task.due_date, task.due_time, "cancel")
         self.database.clear_archived_tasks()
 
     def find_tasks_by_title(self, title_query: str, include_archived: bool = False):
@@ -190,13 +212,23 @@ class TaskService:
             task.status = "выполнена"
             task.is_archived = 1
             task.archived_at = datetime.now().isoformat(timespec="seconds")
+            self.database.update_task(task)
+            # Отменяем уведомления для выполненной задачи
+            if self.notification_callback:
+                self.notification_callback(task_id, task.title, task.due_date, task.due_time, "cancel")
         else:
+            old_due_date = task.due_date
+            old_due_time = task.due_time
             task.due_date = self.get_next_due_date(task.due_date, task.recurrence)
             task.due_time = task.due_time or ""
             task.status = "активна"
             task.is_archived = 0
             task.archived_at = None
-        self.database.update_task(task)
+            self.database.update_task(task)
+            # Отменяем старые уведомления и планируем новые для повторяющейся задачи
+            if self.notification_callback:
+                self.notification_callback(task_id, task.title, old_due_date, old_due_time, "cancel")
+                self.notification_callback(task_id, task.title, task.due_date, task.due_time)
 
     def update_overdue_tasks(self):
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M")
