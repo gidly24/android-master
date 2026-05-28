@@ -1,7 +1,20 @@
 from pathlib import Path
 import sys
+import traceback
 import os
 
+def global_exception_handler(exctype, value, tb):
+    error_msg = ''.join(traceback.format_exception(exctype, value, tb))
+    # Запись в файл на внутреннем хранилище
+    try:
+        with open('/sdcard/app_crash.log', 'a') as f:
+            f.write(error_msg + '\n')
+    except:
+        pass
+    # Вывод в системный лог (попадёт в logcat)
+    sys.__excepthook__(exctype, value, tb)
+
+sys.excepthook = global_exception_handler
 from kivy.config import Config
 
 
