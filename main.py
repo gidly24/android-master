@@ -64,7 +64,19 @@ from ui.components import (
     MaterialRoot,
 )
 from ui.screens import ArchiveScreen, TaskListScreen
-from android.permissions import request_permissions, Permission, check_permission
+if platform == "android":
+    from android.permissions import request_permissions, check_permission
+    class Permission:
+        SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
+else:
+    # Заглушки для локального запуска на ПК
+    def request_permissions(perms, callback=None):
+        if callback:
+            callback(perms, [True]*len(perms))
+    class Permission:
+        SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
+    def check_permission(perm):
+        return True
 
 
 class TaskControlApp(App):
