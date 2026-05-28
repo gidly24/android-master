@@ -3,16 +3,16 @@ import sys
 import traceback
 import os
 
+
 def global_exception_handler(exctype, value, tb):
     error_msg = ''.join(traceback.format_exception(exctype, value, tb))
-    # Запись в файл на внутреннем хранилище
     try:
         with open('/sdcard/app_crash.log', 'a') as f:
             f.write(error_msg + '\n')
     except:
         pass
-    # Вывод в системный лог (попадёт в logcat)
     sys.__excepthook__(exctype, value, tb)
+
 
 sys.excepthook = global_exception_handler
 from kivy.config import Config
@@ -64,6 +64,7 @@ from ui.components import (
     MaterialRoot,
 )
 from ui.screens import ArchiveScreen, TaskListScreen
+from android.permissions import request_permissions, Permission, check_permission
 
 
 class TaskControlApp(App):
@@ -82,8 +83,8 @@ class TaskControlApp(App):
         try:
             self.ai_assistant = AIAssistant(task_service=self.service)
         except ValueError as e:
-            print(f"Error initializing AI Assistant: {e}") # Log the error
-            self.ai_assistant = None # Ensure it's None if initialization fails
+            print(f"Error initializing AI Assistant: {e}")
+            self.ai_assistant = None
         except Exception as e:
             print(f"An unexpected error occurred during AI Assistant initialization: {e}")
             self.ai_assistant = None
@@ -96,18 +97,18 @@ class TaskControlApp(App):
         self.screen_manager = None
 
         root = MaterialRoot(orientation="vertical", spacing=dp(16), padding=dp(16))
-        
+
         # --- Табы ---
         tabs = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(2))
         self.tasks_tab = MaterialButton(
-            text="Задачи", 
-            fill_color=M3_PRIMARY, 
+            text="Задачи",
+            fill_color=M3_PRIMARY,
             radius=0,
             height=dp(48)
         )
         self.archive_tab = MaterialButton(
-            text="Архив", 
-            fill_color=POPUP_SURFACE, 
+            text="Архив",
+            fill_color=POPUP_SURFACE,
             radius=0,
             height=dp(48)
         )
@@ -125,7 +126,7 @@ class TaskControlApp(App):
     def switch_screen(self, name):
         if self.screen_manager.current == name:
             return
-        
+
         direction = "left" if name == "archive" else "right"
         self.screen_manager.transition.direction = direction
         self.screen_manager.current = name
@@ -143,17 +144,24 @@ class TaskControlApp(App):
         self._setup_notification_channel()
         self.check_intent_for_task()
 
-        # Перехват кликов, если приложение уже висит в фоне
         if platform == "android":
             from android.activity import bind as android_bind
             android_bind(on_new_intent=lambda intent: Clock.schedule_once(self.check_intent_for_task, 0.5))
 
-        # Планируем уведомления для существующих задач
-        if platform == "android":
-            self._schedule_all_reminders()
+            if check_permission(Permission.SCHEDULE_EXACT_ALARM):
+                self._schedule_all_reminders()
+            else:
+                request_permissions([Permission.SCHEDULE_EXACT_ALARM], self._on_permission_result)
 
         Clock.schedule_once(self._force_layout_pass, 0)
         Window.bind(size=lambda *_: Clock.schedule_once(self._force_layout_pass, 0))
+
+    def _on_permission_result(self, permissions, grant_results):
+        if grant_results and all(grant_results):
+            print("Permission SCHEDULE_EXACT_ALARM granted, scheduling reminders.")
+            self._schedule_all_reminders()
+        else:
+            print("Permission SCHEDULE_EXACT_ALARM denied. Exact alarms won't work.")
 
     def _build_screens(self):
         self.screen_manager = ScreenManager(transition=SlideTransition(direction='left'))
@@ -164,8 +172,8 @@ class TaskControlApp(App):
             on_open_chat=self.open_chat_modal,
         )
         self.archive_screen = ArchiveScreen(
-            name="archive", 
-            service=self.service, 
+            name="archive",
+            service=self.service,
             on_clear_all=self.clear_archive,
             on_tasks_changed=self.refresh_all_screens
         )
@@ -174,12 +182,11 @@ class TaskControlApp(App):
         return self.screen_manager
 
     def refresh_all_screens(self):
-        # Очищаем выделение при глобальном обновлении (например, после ИИ)
         self.task_list_screen.selected_task_ids.clear()
         self.task_list_screen._update_batch_actions_visibility()
         self.archive_screen.selected_task_ids.clear()
         self.archive_screen._update_batch_actions_visibility()
-        
+
         current = self.screen_manager.current
         self.task_list_screen.refresh_tasks()
         self.archive_screen.refresh_archive()
@@ -197,7 +204,6 @@ class TaskControlApp(App):
             self.root_widget.do_layout()
 
     def _schedule_all_reminders(self):
-        """Планирует уведомления для всех активных задач"""
         tasks = self.service.database.get_all_tasks()
         for task in tasks:
             if not task.is_archived and task.due_date:
@@ -205,7 +211,6 @@ class TaskControlApp(App):
                 self._schedule_reminder(task.id, task.title, task.due_date, task.due_time, "before")
 
     def _schedule_task_reminder(self, task_id: int, title: str, due_date: str, due_time: str, action="schedule"):
-        """Схема для планирования уведомлений при создании/изменении задачи"""
         if action == "cancel":
             self._cancel_reminders(task_id)
         else:
@@ -213,7 +218,6 @@ class TaskControlApp(App):
             self._schedule_reminder(task_id, title, due_date, due_time, "before")
 
     def _cancel_reminders(self, task_id: int):
-        """Отменяет запланированные уведомления для задачи"""
         if platform != "android":
             return
 
@@ -226,10 +230,9 @@ class TaskControlApp(App):
         python_activity = autoclass("org.kivy.android.PythonActivity")
         context = cast("android.content.Context", python_activity.mActivity)
 
-        # Отменяем оба уведомления: "вовремя" и "за час"
         for reminder_type in ["start", "before"]:
             req_code = task_id * (1 if reminder_type == "start" else 2)
-            
+
             intent = Intent()
             intent.setClassName(context.getPackageName(), "org.kivy.android.PythonBroadcastReceiver")
             intent.setAction("com.taskcontrol.reminder")
@@ -241,12 +244,11 @@ class TaskControlApp(App):
                 flags |= PendingIntent.FLAG_IMMUTABLE
 
             pending_intent = PendingIntent.getBroadcast(context, req_code, intent, flags)
-            
+
             alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
             alarm_manager.cancel(pending_intent)
 
     def _setup_notification_channel(self):
-        """Создает канал уведомлений для Android 8+"""
         if platform != "android":
             return
 
@@ -273,7 +275,6 @@ class TaskControlApp(App):
         notification_service.createNotificationChannel(notification_channel)
 
     def _show_notification(self, title, message, task_id=None):
-        """Отображает нативное уведомление с действием открытия приложения"""
         if platform != "android":
             return
 
@@ -289,14 +290,12 @@ class TaskControlApp(App):
         Intent = autoclass("android.content.Intent")
         PendingIntent = autoclass("android.app.PendingIntent")
 
-        # Интент для открытия приложения при клике
         notification_intent = Intent(context, PythonActivity)
         notification_intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
 
         if task_id:
             notification_intent.putExtra("open_task_id", task_id)
 
-        # Настройка флагов для Android 12+
         pending_flags = PendingIntent.FLAG_UPDATE_CURRENT
         if hasattr(PendingIntent, "FLAG_IMMUTABLE"):
             pending_flags |= PendingIntent.FLAG_IMMUTABLE
@@ -322,8 +321,12 @@ class TaskControlApp(App):
 
     def _schedule_reminder(self, task_id: int, title: str, due_date: str, due_time: str,
                            reminder_type: str = "start"):
-        """Планирует срабатывание AlarmManager на определенное время"""
         if platform != "android":
+            return
+
+        # Проверяем разрешение перед установкой будильника
+        if not check_permission(Permission.SCHEDULE_EXACT_ALARM):
+            print(f"Missing SCHEDULE_EXACT_ALARM, skipping reminder for task {task_id}")
             return
 
         from jnius import autoclass, cast
@@ -332,7 +335,6 @@ class TaskControlApp(App):
         if not due_date:
             return
 
-        # Парсим дату и время задачи
         try:
             time_str = due_time if due_time else "00:00"
             dt = datetime.fromisoformat(f"{due_date}T{time_str}")
@@ -344,7 +346,6 @@ class TaskControlApp(App):
         else:
             trigger_time = dt
 
-        # Если время уже прошло, не планируем
         if trigger_time < datetime.now():
             return
 
@@ -358,7 +359,6 @@ class TaskControlApp(App):
         python_activity = autoclass("org.kivy.android.PythonActivity")
         context = cast("android.content.Context", python_activity.mActivity)
 
-        # ВАЖНО: Используем интент, направленный на наш будущий BroadcastReceiver
         intent = Intent()
         intent.setClassName(context.getPackageName(), "org.kivy.android.PythonBroadcastReceiver")
         intent.setAction("com.taskcontrol.reminder")
@@ -370,7 +370,6 @@ class TaskControlApp(App):
         if hasattr(PendingIntent, "FLAG_IMMUTABLE"):
             flags |= PendingIntent.FLAG_IMMUTABLE
 
-        # Уникальный requestCode для разделения "вовремя" и "за час"
         req_code = task_id * (1 if reminder_type == "start" else 2)
         pending_intent = PendingIntent.getBroadcast(context, req_code, intent, flags)
 
@@ -382,7 +381,6 @@ class TaskControlApp(App):
         )
 
     def check_intent_for_task(self, *args):
-        """Проверяет, было ли приложение открыто из уведомления"""
         if platform != "android":
             return
 
@@ -394,10 +392,6 @@ class TaskControlApp(App):
         if intent and intent.hasExtra("open_task_id"):
             task_id = intent.getIntExtra("open_task_id", 0)
             print(f"[Уведомления] Кликнули по задаче с ID: {task_id}")
-
-            # TODO: Здесь можно добавить переключение экрана или фокус на задачу
-            # Например: self.switch_screen("tasks")
-
             intent.removeExtra("open_task_id")
 
 

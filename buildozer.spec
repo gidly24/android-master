@@ -95,7 +95,7 @@ fullscreen = 0
 
 # (list) Permissions
 # (See https://python-for-android.readthedocs.io/en/latest/buildoptions/#build-options-1 for all the supported syntaxes and properties)
-android.permissions = android.permission.INTERNET, android.permission.WAKE_LOCK, android.permission.ALARM_SERVICE
+android.permissions = android.permission.INTERNET, android.permission.WAKE_LOCK, android.permission.ALARM_SERVICE, android.permission.SCHEDULE_EXACT_ALARM
 
 # (list) features (adds uses-feature -tags to manifest)
 #android.features = android.hardware.usb.host
