@@ -65,16 +65,58 @@ from ui.components import (
 )
 from ui.screens import ArchiveScreen, TaskListScreen
 if platform == "android":
-    from android.permissions import request_permissions, check_permission
     class Permission:
         SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
+
+    try:
+        from android.permissions import request_permissions as _request_permissions
+    except Exception:
+        _request_permissions = None
+
+    try:
+        from android.permissions import check_permission as _check_permission
+    except Exception:
+        _check_permission = None
+
+    def request_permissions(perms, callback=None):
+        if _request_permissions is None:
+            if callback:
+                callback(perms, [False] * len(perms))
+            return
+        _request_permissions(perms, callback)
+
+    def check_permission(perm):
+        if _check_permission is not None:
+            try:
+                return _check_permission(perm)
+            except Exception:
+                pass
+
+        if perm == Permission.SCHEDULE_EXACT_ALARM:
+            try:
+                from android import api_version
+                if api_version < 31:
+                    return True
+
+                from jnius import autoclass, cast
+                Context = autoclass("android.content.Context")
+                PythonActivity = autoclass("org.kivy.android.PythonActivity")
+                context = cast("android.content.Context", PythonActivity.mActivity)
+                alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
+                return bool(alarm_manager and alarm_manager.canScheduleExactAlarms())
+            except Exception:
+                return False
+
+        return False
 else:
     # Заглушки для локального запуска на ПК
     def request_permissions(perms, callback=None):
         if callback:
             callback(perms, [True]*len(perms))
+
     class Permission:
         SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
+
     def check_permission(perm):
         return True
 
@@ -163,7 +205,7 @@ class TaskControlApp(App):
             if check_permission(Permission.SCHEDULE_EXACT_ALARM):
                 self._schedule_all_reminders()
             else:
-                request_permissions([Permission.SCHEDULE_EXACT_ALARM], self._on_permission_result)
+                print("Permission SCHEDULE_EXACT_ALARM is not available. Exact reminders are skipped.")
 
         Clock.schedule_once(self._force_layout_pass, 0)
         Window.bind(size=lambda *_: Clock.schedule_once(self._force_layout_pass, 0))
