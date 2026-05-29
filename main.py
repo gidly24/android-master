@@ -2,7 +2,11 @@ from pathlib import Path
 import sys
 import traceback
 import os
+import ssl
+import certifi
 
+# Принудительно устанавливаем путь к сертификатам для SSL
+os.environ['SSL_CERT_FILE'] = certifi.where()
 
 def global_exception_handler(exctype, value, tb):
     error_msg = ''.join(traceback.format_exception(exctype, value, tb))
@@ -19,8 +23,19 @@ from kivy.config import Config
 
 
 def load_env_file():
-    env_path = Path(__file__).parent / "config.env"
-    if env_path.exists():
+    # На Android Path(__file__).parent может указывать на разные места
+    possible_paths = [
+        Path(__file__).parent / "config.env",
+        Path(".") / "config.env"
+    ]
+    
+    env_path = None
+    for p in possible_paths:
+        if p.exists():
+            env_path = p
+            break
+            
+    if env_path:
         with open(env_path) as f:
             for line in f:
                 line = line.strip()
@@ -195,6 +210,7 @@ class TaskControlApp(App):
             self.archive_tab.set_palette(fill_color=M3_PRIMARY)
 
     def on_start(self):
+        self._request_android_permissions()
         self._setup_notification_channel()
         self.check_intent_for_task()
 
@@ -301,6 +317,47 @@ class TaskControlApp(App):
 
             alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
             alarm_manager.cancel(pending_intent)
+
+    def _request_android_permissions(self):
+        """Запрашивает необходимые разрешения на Android"""
+        if platform != "android":
+            return
+
+        from android.permissions import request_permissions, Permission
+        from android import api_version
+
+        permissions = [Permission.POST_NOTIFICATIONS]
+        
+        # Для Android 12+ (API 31+) нужно разрешение на точные будильники, 
+        # но оно обычно дается автоматически или запрашивается иначе.
+        # POST_NOTIFICATIONS нужно для Android 13+ (API 33+)
+        
+        def callback(permissions, results):
+            if all(results):
+                print("[Разрешения] Все разрешения получены")
+            else:
+                print("[Разрешения] Некоторые разрешения отклонены")
+
+        request_permissions(permissions, callback)
+
+    def _request_android_permissions(self):
+        """Запрашивает необходимые разрешения на Android"""
+        if platform != "android":
+            return
+
+        try:
+            from android.permissions import request_permissions, Permission
+            permissions = [Permission.POST_NOTIFICATIONS]
+            
+            def callback(permissions, results):
+                if all(results):
+                    print("[Разрешения] Уведомления разрешены")
+                else:
+                    print("[Разрешения] Уведомления отклонены")
+
+            request_permissions(permissions, callback)
+        except Exception as e:
+            print(f"[Разрешения] Ошибка при запросе: {e}")
 
     def _setup_notification_channel(self):
         if platform != "android":

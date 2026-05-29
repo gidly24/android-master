@@ -37,7 +37,7 @@ version = 1.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pillow,sqlite3,pyjnius
+requirements = python3,kivy,pillow,sqlite3,pyjnius,certifi,openssl
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -119,7 +119,7 @@ android.minapi = 21
 #android.private_storage = True
 
 # (str) Android NDK directory (if empty, it will be automatically downloaded.)
-#android.ndk_path =
+#android.ndk_path =цщ
 
 # (str) Android SDK directory (if empty, it will be automatically downloaded.)
 #android.sdk_path =
@@ -201,7 +201,7 @@ android.add_src = android
 #android.add_resources =
 
 # (list) Gradle dependencies to add
-android.gradle_dependencies = androidx.core:core:1.13.1, androidx.media:media:1.7.0
+android.gradle_dependencies = androidx.core:core:1.13.1, androidx.media:media:1.7.0, androidx.appcompat:appcompat:1.6.1
 
 # (bool) Enable AndroidX support. Enable when 'android.gradle_dependencies'
 # contains an 'androidx' package, or any package from Kotlin source.
