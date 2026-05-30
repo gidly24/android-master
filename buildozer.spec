@@ -201,7 +201,7 @@ android.add_src = android
 #android.add_resources =
 
 # (list) Gradle dependencies to add
-android.gradle_dependencies = androidx.core:core:1.13.1, androidx.media:media:1.7.0, androidx.appcompat:appcompat:1.6.1
+android.gradle_dependencies = androidx.core:core:1.13.1
 
 # (bool) Enable AndroidX support. Enable when 'android.gradle_dependencies'
 # contains an 'androidx' package, or any package from Kotlin source.
@@ -222,8 +222,8 @@ android.enable_androidx = True
 # see https://google.github.io/android-gradle-dsl/current/com.android.build.gradle.internal.dsl.PackagingOptions.html
 # can be necessary to solve conflicts in gradle_dependencies
 # please enclose in double quotes 
-# e.g. android.add_packaging_options = "exclude 'META-INF/common.kotlin_module'", "exclude 'META-INF/*.kotlin_module'"
-#android.add_packaging_options =
+# e.g. android.add_packaging_options = "exclude 'META-INF/common.kotlin_module'", "exclude 'META-INF/*.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk8.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk7.kotlin_module'"
+android.add_packaging_options = "exclude 'META-INF/common.kotlin_module'", "exclude 'META-INF/*.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk8.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk7.kotlin_module'"
 
 # (list) Java classes to add as activities to the manifest.
 #android.add_activities = com.example.ExampleActivity

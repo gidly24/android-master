@@ -1,5 +1,6 @@
 import json
 import os
+import ssl
 import urllib.request
 import urllib.error
 from datetime import date
@@ -115,6 +116,20 @@ Rules:
             http_proxy = os.getenv("HTTP_PROXY")
             https_proxy = os.getenv("HTTPS_PROXY")
 
+            # Создаём SSL-контекст: на Android certifi недоступен, используем системные сертификаты
+            try:
+                ssl_context = ssl.create_default_context()
+                import certifi
+                ssl_context.load_verify_locations(certifi.where())
+            except Exception:
+                # На Android certifi может отсутствовать — используем системные CA
+                try:
+                    ssl_context = ssl.create_default_context()
+                except Exception:
+                    ssl_context = ssl._create_unverified_context()
+
+            https_handler = urllib.request.HTTPSHandler(context=ssl_context)
+
             if http_proxy or https_proxy:
                 proxy_support = {}
                 if http_proxy:
@@ -122,45 +137,35 @@ Rules:
                         parsed_http = urlparse(http_proxy)
                         encoded_username = quote_plus(parsed_http.username) if parsed_http.username else ""
                         encoded_password = quote_plus(parsed_http.password) if parsed_http.password else ""
-                        
-                        # Reconstruct netloc with encoded credentials
                         if parsed_http.username and parsed_http.password:
                             netloc = f"{encoded_username}:{encoded_password}@{parsed_http.hostname}:{parsed_http.port}"
                         elif parsed_http.username:
                             netloc = f"{encoded_username}@{parsed_http.hostname}:{parsed_http.port}"
                         else:
-                            netloc = f"{parsed_http.hostname}:{parsed_http.port}" # No credentials
-
-                        # Construct the final URL
-                        encoded_http_proxy_url = f"{parsed_http.scheme}://{netloc}"
-                        proxy_support['http'] = encoded_http_proxy_url
+                            netloc = f"{parsed_http.hostname}:{parsed_http.port}"
+                        proxy_support['http'] = f"{parsed_http.scheme}://{netloc}"
                     except Exception:
-                        # Fallback to original if parsing/encoding fails
-                        proxy_support['http'] = http_proxy 
+                        proxy_support['http'] = http_proxy
 
                 if https_proxy:
                     try:
                         parsed_https = urlparse(https_proxy)
                         encoded_username = quote_plus(parsed_https.username) if parsed_https.username else ""
                         encoded_password = quote_plus(parsed_https.password) if parsed_https.password else ""
-                        
                         if parsed_https.username and parsed_https.password:
                             netloc = f"{encoded_username}:{encoded_password}@{parsed_https.hostname}:{parsed_https.port}"
                         elif parsed_https.username:
                             netloc = f"{encoded_username}@{parsed_https.hostname}:{parsed_https.port}"
                         else:
-                            netloc = f"{parsed_https.hostname}:{parsed_https.port}" # No credentials
-
-                        encoded_https_proxy_url = f"{parsed_https.scheme}://{netloc}"
-                        proxy_support['https'] = encoded_https_proxy_url
+                            netloc = f"{parsed_https.hostname}:{parsed_https.port}"
+                        proxy_support['https'] = f"{parsed_https.scheme}://{netloc}"
                     except Exception:
-                        # Fallback to original if parsing/encoding fails
-                        proxy_support['https'] = https_proxy 
-                
+                        proxy_support['https'] = https_proxy
+
                 proxy_handler = urllib.request.ProxyHandler(proxy_support)
-                opener = urllib.request.build_opener(proxy_handler)
+                opener = urllib.request.build_opener(https_handler, proxy_handler)
             else:
-                opener = urllib.request.build_opener() # Default opener if no proxy
+                opener = urllib.request.build_opener(https_handler)
             # --- PROXY CONFIGURATION END ---
 
             with opener.open(req, timeout=30) as response:

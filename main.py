@@ -3,10 +3,13 @@ import sys
 import traceback
 import os
 import ssl
-import certifi
 
-# Принудительно устанавливаем путь к сертификатам для SSL
-os.environ['SSL_CERT_FILE'] = certifi.where()
+# Устанавливаем путь к сертификатам для SSL (только если certifi доступен)
+try:
+    import certifi
+    os.environ['SSL_CERT_FILE'] = certifi.where()
+except Exception:
+    pass
 
 def global_exception_handler(exctype, value, tb):
     error_msg = ''.join(traceback.format_exception(exctype, value, tb))
@@ -474,7 +477,7 @@ class TaskControlApp(App):
         intent.setClassName(context.getPackageName(), "org.kivy.android.PythonBroadcastReceiver")
         intent.setAction("com.taskcontrol.reminder")
         intent.putExtra("task_id", task_id)
-        intent.putExtra("title", title)
+        intent.putExtra("title", title if title else "")
         intent.putExtra("type", reminder_type)
 
         flags = PendingIntent.FLAG_UPDATE_CURRENT
