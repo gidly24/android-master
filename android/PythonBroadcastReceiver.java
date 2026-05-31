@@ -8,15 +8,22 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
+import android.util.Log;
 import androidx.core.app.NotificationCompat;
 
 public class PythonBroadcastReceiver extends BroadcastReceiver {
     
+    private static final String TAG = "TaskControlReminder";
+
     @Override
     public void onReceive(Context context, Intent intent) {
+        Log.d(TAG, "onReceive called, action=" + (intent != null ? intent.getAction() : "null"));
+
         String title = intent.getStringExtra("title");
         String type = intent.getStringExtra("type");
         int task_id = intent.getIntExtra("task_id", 0);
+
+        Log.d(TAG, "task_id=" + task_id + ", title=" + title + ", type=" + type);
         
         String message = "";
         if ("before".equals(type)) {
@@ -54,7 +61,7 @@ public class PythonBroadcastReceiver extends BroadcastReceiver {
             NotificationChannel channel = new NotificationChannel(
                 "task_reminder_channel",
                 "Напоминания о задачах",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             );
             channel.setDescription("Уведомления о предстоящих задачах");
             notificationManager.createNotificationChannel(channel);
@@ -66,6 +73,8 @@ public class PythonBroadcastReceiver extends BroadcastReceiver {
             .setContentText(message)
             .setSmallIcon(context.getApplicationInfo().icon)
             .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setContentIntent(pendingIntent);
         
         Notification notification = builder.build();

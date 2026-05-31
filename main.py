@@ -229,6 +229,9 @@ class TaskControlApp(App):
         Clock.schedule_once(self._force_layout_pass, 0)
         Window.bind(size=lambda *_: Clock.schedule_once(self._force_layout_pass, 0))
 
+        if platform == "android":
+            Clock.schedule_once(self._send_test_notification, 10)
+
     def _on_permission_result(self, permissions, grant_results):
         if grant_results and all(grant_results):
             print("Permission SCHEDULE_EXACT_ALARM granted, scheduling reminders.")
@@ -271,6 +274,48 @@ class TaskControlApp(App):
     def open_chat_modal(self):
         if not self.chat_modal._window:
             self.chat_modal.open()
+
+    def _send_test_notification(self, *args):
+        """Тестовое уведомление через AlarmManager через 15 секунд для проверки BroadcastReceiver"""
+        if platform != "android":
+            return
+        try:
+            from jnius import autoclass, cast
+            from datetime import datetime, timedelta
+
+            Context = autoclass("android.content.Context")
+            Intent = autoclass("android.content.Intent")
+            PendingIntent = autoclass("android.app.PendingIntent")
+            AlarmManager = autoclass("android.app.AlarmManager")
+
+            python_activity = autoclass("org.kivy.android.PythonActivity")
+            context = cast("android.content.Context", python_activity.mActivity)
+
+            trigger_time = datetime.now() + timedelta(seconds=15)
+            trigger_millis = int(trigger_time.timestamp() * 1000)
+
+            intent = Intent()
+            intent.setClassName(context.getPackageName(), "org.kivy.android.PythonBroadcastReceiver")
+            intent.setAction("com.taskcontrol.reminder")
+            intent.putExtra("task_id", 999999)
+            intent.putExtra("title", "Тестовое уведомление")
+            intent.putExtra("type", "start")
+
+            flags = PendingIntent.FLAG_UPDATE_CURRENT
+            if hasattr(PendingIntent, "FLAG_IMMUTABLE"):
+                flags |= PendingIntent.FLAG_IMMUTABLE
+
+            pending_intent = PendingIntent.getBroadcast(context, 999999, intent, flags)
+
+            alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
+            alarm_manager.setExactAndAllowWhileIdle(
+                AlarmManager.RTC_WAKEUP,
+                trigger_millis,
+                pending_intent
+            )
+            print(f"[Test] Scheduled test notification at {trigger_time}")
+        except Exception as e:
+            print(f"[Test] Failed to schedule test notification: {e}")
 
     def _force_layout_pass(self, *_):
         if hasattr(self.root_widget, "do_layout"):
@@ -326,28 +371,6 @@ class TaskControlApp(App):
         if platform != "android":
             return
 
-        from android.permissions import request_permissions, Permission
-        from android import api_version
-
-        permissions = [Permission.POST_NOTIFICATIONS]
-        
-        # Для Android 12+ (API 31+) нужно разрешение на точные будильники, 
-        # но оно обычно дается автоматически или запрашивается иначе.
-        # POST_NOTIFICATIONS нужно для Android 13+ (API 33+)
-        
-        def callback(permissions, results):
-            if all(results):
-                print("[Разрешения] Все разрешения получены")
-            else:
-                print("[Разрешения] Некоторые разрешения отклонены")
-
-        request_permissions(permissions, callback)
-
-    def _request_android_permissions(self):
-        """Запрашивает необходимые разрешения на Android"""
-        if platform != "android":
-            return
-
         try:
             from android.permissions import request_permissions, Permission
             permissions = [Permission.POST_NOTIFICATIONS]
@@ -380,7 +403,7 @@ class TaskControlApp(App):
         channel_id = "task_reminder_channel"
         channel_name = "Напоминания о задачах"
         channel_description = "Уведомления о предстоящих задачах"
-        importance = NotificationManager.IMPORTANCE_DEFAULT
+        importance = NotificationManager.IMPORTANCE_HIGH
 
         notification_channel = NotificationChannel(channel_id, channel_name, importance)
         notification_channel.setDescription(channel_description)
@@ -493,6 +516,7 @@ class TaskControlApp(App):
             trigger_millis,
             pending_intent
         )
+        print(f"[Reminder] Scheduled {reminder_type} for task {task_id} '{title}' at {trigger_time} (millis={trigger_millis})")
 
     def check_intent_for_task(self, *args):
         if platform != "android":
