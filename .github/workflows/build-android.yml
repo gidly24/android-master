@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     container:
-      image: kivy/kivy:latest
+      image: kivy/kivy:2.3.1
 
     steps:
     - name: Checkout code
