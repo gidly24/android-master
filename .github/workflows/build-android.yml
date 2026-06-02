@@ -54,7 +54,14 @@ jobs:
     - name: Install autotools
       run: |
         sudo apt-get update
-        sudo apt-get install -y autoconf automake libtool m4
+        sudo apt-get install -y \
+          autoconf \
+          automake \
+          libtool \
+          libtool-bin \
+          m4 \
+          pkg-config
+        sudo libtoolize --install --force --verbose
     
     - name: Build APK (Debug)
       run: |
