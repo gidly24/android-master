@@ -11,51 +11,65 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 360
-    container:
-      image: kivy/kivy:latest
-      options: --memory=8gb
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install additional dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+
+    - name: Install system dependencies
       run: |
-        apt-get update
-        apt-get install -y --no-install-recommends \
+        sudo apt-get update
+        sudo apt-get install -y \
+          openjdk-11-jdk \
+          openjdk-11-jre \
+          build-essential \
           git \
           wget \
           curl \
           unzip \
-          ccache
+          ccache \
+          libncurses6 \
+          autoconf \
+          automake \
+          libtool \
+          pkg-config \
+          libffi-dev \
+          libssl-dev
 
     - name: Setup Python environment
       run: |
-        python3 -m pip install --upgrade pip setuptools wheel
-        pip3 install buildozer cython
-        pip3 install -r requirements.txt
+        python -m pip install --upgrade pip setuptools wheel
+        pip install buildozer cython==0.29.36
+        pip install -r requirements.txt
 
     - name: Cache buildozer and gradle
       uses: actions/cache@v3
       with:
         path: |
-          /root/.buildozer
-          /root/.gradle
-          /root/.android
-        key: ${{ runner.os }}-kivy-buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
+          ~/.buildozer
+          ~/.gradle
+          ~/.android
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-kivy-buildozer-
+          ${{ runner.os }}-buildozer-
 
     - name: Build APK (Debug)
       run: |
-        export PATH="/usr/lib/ccache:$PATH"
-        export CCACHE_DIR=~/.ccache
         echo "y" | buildozer android debug 2>&1 | tee build.log
       env:
+        PATH: "/usr/lib/ccache:$PATH"
+        CCACHE_DIR: ~/.ccache
         P4A_DEBUG: 0
         P4A_RELEASE_ARTIFACT: apk
-        GRADLE_OPTS: -Xmx6144m -XX:+HeapDumpOnOutOfMemoryError
-        JAVA_OPTS: -Xmx6144m
+        GRADLE_OPTS: -Xmx4096m
+        JAVA_OPTS: -Xmx4096m
+        JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
 
     - name: List build output
       if: always()
@@ -87,12 +101,11 @@ jobs:
         name: build-failure-logs
         path: |
           build.log
-          /root/.buildozer/android/platform/build-*/build.log
-          .buildozer/android/platform/build-*/build.log
+          ~/.buildozer/android/platform/build-*/build.log
         if-no-files-found: ignore
 
     - name: Show build log tail on failure
       if: failure()
       run: |
         echo "=== Last 100 lines of build.log ==="
-        tail -100 build.log || true
+        tail -100 build.log 2>/dev/null || echo "No build.log found"
