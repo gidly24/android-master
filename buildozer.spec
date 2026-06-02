@@ -37,12 +37,21 @@ version = 1.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-# Simplified: Remove certifi (handled by requests), simplified deps
-requirements = python3,kivy,pillow,sqlite3,pyjnius
+# Use python3.10 instead of default python3 (which is 3.14 and causes build issues)
+requirements = python3.10,kivy,pillow,sqlite3,pyjnius
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
 # requirements.source.kivy = ../../kivy
+
+# (str) python-for-android dir (for local recipes)
+#p4a.dir = ./python-for-android
+
+# (str) python-for-android bootstrap
+p4a.bootstrap = sdl2
+
+# (str) Supported archs (filter to reduce build time)
+p4a.archs = arm64-v8a
 
 # (str) Presplash of the application
 #presplash.filename = %(source.dir)s/data/presplash.png

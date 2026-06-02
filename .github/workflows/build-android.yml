@@ -10,9 +10,10 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 360
     container:
       image: kivy/kivy:latest
+      options: --memory=8gb
 
     steps:
     - name: Checkout code
@@ -49,12 +50,12 @@ jobs:
       run: |
         export PATH="/usr/lib/ccache:$PATH"
         export CCACHE_DIR=~/.ccache
-        echo "y" | buildozer android debug
+        echo "y" | buildozer android debug 2>&1 | tee build.log
       env:
         P4A_DEBUG: 0
         P4A_RELEASE_ARTIFACT: apk
-        GRADLE_OPTS: -Xmx3072m -XX:+HeapDumpOnOutOfMemoryError
-        JAVA_OPTS: -Xmx3072m
+        GRADLE_OPTS: -Xmx6144m -XX:+HeapDumpOnOutOfMemoryError
+        JAVA_OPTS: -Xmx6144m
 
     - name: List build output
       if: always()
@@ -79,12 +80,19 @@ jobs:
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: Upload build log on failure
+    - name: Upload build logs on failure
       if: failure()
       uses: actions/upload-artifact@v4
       with:
         name: build-failure-logs
         path: |
+          build.log
           /root/.buildozer/android/platform/build-*/build.log
           .buildozer/android/platform/build-*/build.log
         if-no-files-found: ignore
+
+    - name: Show build log tail on failure
+      if: failure()
+      run: |
+        echo "=== Last 100 lines of build.log ==="
+        tail -100 build.log || true
