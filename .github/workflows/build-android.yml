@@ -11,39 +11,45 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 180
-    container:
-      image: kivy/kivy:2.3.1
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install additional dependencies
+    - name: Install dependencies
       run: |
-        apt-get update
-        apt-get install -y --no-install-recommends \
+        sudo apt-get update
+        sudo apt-get install -y --no-install-recommends \
+          python3-dev \
+          python3-pip \
           git \
           wget \
           curl \
           unzip \
-          ccache
+          ccache \
+          openjdk-11-jdk \
+          build-essential \
+          cython3
 
     - name: Setup Python environment
       run: |
         python3 -m pip install --upgrade pip setuptools wheel
-        pip3 install buildozer cython
+        pip3 install kivy buildozer cython
+
+    - name: Install Kivy dependencies
+      run: |
         pip3 install -r requirements.txt
 
     - name: Cache buildozer and gradle
       uses: actions/cache@v3
       with:
         path: |
-          /root/.buildozer
-          /root/.gradle
-          /root/.android
-        key: ${{ runner.os }}-kivy-buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
+          ~/.buildozer
+          ~/.gradle
+          ~/.android
+        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-kivy-buildozer-
+          ${{ runner.os }}-buildozer-
 
     - name: Build APK (Debug)
       run: |
@@ -85,6 +91,6 @@ jobs:
       with:
         name: build-failure-logs
         path: |
-          /root/.buildozer/android/platform/build-*/build.log
+          ~/.buildozer/android/platform/build-*/build.log
           .buildozer/android/platform/build-*/build.log
         if-no-files-found: ignore
