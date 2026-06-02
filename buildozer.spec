@@ -37,7 +37,8 @@ version = 1.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pillow,sqlite3,pyjnius,certifi
+# Simplified: Remove certifi (handled by requests), simplified deps
+requirements = python3,kivy,pillow,sqlite3,pyjnius
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes

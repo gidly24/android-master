@@ -10,57 +10,29 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 180
     container:
-      image: ubuntu:22.04
+      image: kivy/kivy:latest
 
     steps:
     - name: Checkout code
       uses: actions/checkout@v4
 
-    - name: Install system dependencies (complete)
+    - name: Install additional dependencies
       run: |
         apt-get update
         apt-get install -y --no-install-recommends \
-          python3 \
-          python3-pip \
-          python3-venv \
-          openjdk-11-jdk \
-          openjdk-11-jre \
-          build-essential \
-          ccache \
           git \
           wget \
           curl \
           unzip \
-          libncurses6 \
-          libstdc++6 \
-          libsdl2-dev \
-          libsdl2-image-dev \
-          libsdl2-mixer-dev \
-          libsdl2-ttf-dev \
-          libportmidi-dev \
-          libswscale-dev \
-          libavformat-dev \
-          libavcodec-dev \
-          zlib1g-dev \
-          libtool \
-          libtool-bin \
-          autoconf \
-          automake \
-          pkg-config \
-          libffi-dev \
-          libssl-dev \
-          m4 \
-          gettext \
-          texinfo
+          ccache
 
     - name: Setup Python environment
       run: |
-        export PATH="$HOME/.local/bin:$PATH"
         python3 -m pip install --upgrade pip setuptools wheel
-        pip3 install --break-system-packages buildozer cython==0.29.36
-        pip3 install --break-system-packages -r requirements.txt
+        pip3 install buildozer cython
+        pip3 install -r requirements.txt
 
     - name: Cache buildozer and gradle
       uses: actions/cache@v3
@@ -69,21 +41,20 @@ jobs:
           /root/.buildozer
           /root/.gradle
           /root/.android
-        key: ${{ runner.os }}-buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
+        key: ${{ runner.os }}-kivy-buildozer-${{ hashFiles('buildozer.spec') }}-${{ hashFiles('requirements.txt') }}
         restore-keys: |
-          ${{ runner.os }}-buildozer-
+          ${{ runner.os }}-kivy-buildozer-
 
     - name: Build APK (Debug)
       run: |
-        export PATH="/usr/lib/ccache:$HOME/.local/bin:/root/.local/bin:$PATH"
+        export PATH="/usr/lib/ccache:$PATH"
         export CCACHE_DIR=~/.ccache
         echo "y" | buildozer android debug
       env:
         P4A_DEBUG: 0
         P4A_RELEASE_ARTIFACT: apk
-        GRADLE_OPTS: -Xmx2048m -XX:+HeapDumpOnOutOfMemoryError
-        JAVA_OPTS: -Xmx2048m
-        JAVA_HOME: /usr/lib/jvm/java-11-openjdk-amd64
+        GRADLE_OPTS: -Xmx3072m -XX:+HeapDumpOnOutOfMemoryError
+        JAVA_OPTS: -Xmx3072m
 
     - name: List build output
       if: always()
@@ -115,4 +86,5 @@ jobs:
         name: build-failure-logs
         path: |
           /root/.buildozer/android/platform/build-*/build.log
+          .buildozer/android/platform/build-*/build.log
         if-no-files-found: ignore
