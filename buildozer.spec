@@ -37,7 +37,7 @@ version = 1.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-requirements = python3,kivy,pillow,sqlite3,pyjnius,certifi,openssl
+requirements = python3,kivy,pillow,sqlite3,pyjnius,certifi
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
@@ -119,7 +119,7 @@ android.minapi = 21
 #android.private_storage = True
 
 # (str) Android NDK directory (if empty, it will be automatically downloaded.)
-#android.ndk_path =цщ
+#android.ndk_path =
 
 # (str) Android SDK directory (if empty, it will be automatically downloaded.)
 #android.sdk_path =
@@ -214,16 +214,16 @@ android.enable_androidx = True
 # android.add_compile_options = "sourceCompatibility = 1.8", "targetCompatibility = 1.8"
 
 # (list) Gradle repositories to add {can be necessary for some android.gradle_dependencies}
-# please enclose in double quotes 
+# please enclose in double quotes
 # e.g. android.gradle_repositories = "maven { url 'https://kotlin.bintray.com/ktor' }"
-#android.add_gradle_repositories =
+android.add_gradle_repositories = "google()", "mavenCentral()"
 
 # (list) packaging options to add 
 # see https://google.github.io/android-gradle-dsl/current/com.android.build.gradle.internal.dsl.PackagingOptions.html
 # can be necessary to solve conflicts in gradle_dependencies
 # please enclose in double quotes 
-# e.g. android.add_packaging_options = "exclude 'META-INF/common.kotlin_module'", "exclude 'META-INF/*.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk8.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk7.kotlin_module'"
-android.add_packaging_options = "exclude 'META-INF/common.kotlin_module'", "exclude 'META-INF/*.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk8.kotlin_module'", "exclude 'META-INF/kotlin-stdlib-jdk7.kotlin_module'"
+# e.g. android.add_packaging_options = "exclude 'META-INF/proguard/androidx-*.pro'", "exclude 'META-INF/common.kotlin_module'"
+android.add_packaging_options = "exclude 'META-INF/proguard/androidx-*.pro'", "exclude 'META-INF/common.kotlin_module'"
 
 # (list) Java classes to add as activities to the manifest.
 #android.add_activities = com.example.ExampleActivity
@@ -283,7 +283,8 @@ android.add_packaging_options = "exclude 'META-INF/common.kotlin_module'", "excl
 
 # (list) The Android archs to build for, choices: armeabi-v7a, arm64-v8a, x86, x86_64
 # In past, was `android.arch` as we weren't supporting builds for multiple archs at the same time.
-android.archs = arm64-v8a, armeabi-v7a
+# Для быстрой сборки сначала только arm64-v8a, позже добавить armeabi-v7a
+android.archs = arm64-v8a
 
 # (int) overrides automatic versionCode computation (used in build.gradle)
 # this is not the same as app version and should only be edited if you know what you're doing
