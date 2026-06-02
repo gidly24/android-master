@@ -1,7 +1,0 @@
-<manifest>
-    <application>
-        <receiver
-            android:name="org.kivy.android.PythonBroadcastReceiver"
-            android:exported="false"/>
-    </application>
-</manifest>
