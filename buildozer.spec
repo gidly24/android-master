@@ -37,21 +37,11 @@ version = 1.0
 
 # (list) Application requirements
 # comma separated e.g. requirements = sqlite3,kivy
-# Use python3.10 instead of default python3 (which is 3.14 and causes build issues)
-requirements = python3.10,kivy,pillow,sqlite3,pyjnius
+requirements = python3,kivy,pillow,sqlite3,pyjnius,certifi
 
 # (str) Custom source folders for requirements
 # Sets custom source for any requirements with recipes
 # requirements.source.kivy = ../../kivy
-
-# (str) python-for-android dir (for local recipes)
-#p4a.dir = ./python-for-android
-
-# (str) python-for-android bootstrap
-p4a.bootstrap = sdl2
-
-# (str) Supported archs (filter to reduce build time)
-p4a.archs = arm64-v8a
 
 # (str) Presplash of the application
 #presplash.filename = %(source.dir)s/data/presplash.png
@@ -205,7 +195,7 @@ android.add_src = android
 # android.add_resources = my_icons/all-inclusive.png:drawable/all_inclusive.png
 # 2) A directory, here  'legal_icons' must contain resources of one kind
 # android.add_resources = legal_icons:drawable
-# 3) A directory, here 'legal_resources' must contain one or more directories, 
+# 3) A directory, here  'legal_resources' must contain one or more directories,
 # each of a resource kind:  drawable, xml, etc...
 # android.add_resources = legal_resources
 #android.add_resources =
@@ -228,10 +218,10 @@ android.enable_androidx = True
 # e.g. android.gradle_repositories = "maven { url 'https://kotlin.bintray.com/ktor' }"
 android.add_gradle_repositories = "google()", "mavenCentral()"
 
-# (list) packaging options to add 
+# (list) packaging options to add
 # see https://google.github.io/android-gradle-dsl/current/com.android.build.gradle.internal.dsl.PackagingOptions.html
 # can be necessary to solve conflicts in gradle_dependencies
-# please enclose in double quotes 
+# please enclose in double quotes
 # e.g. android.add_packaging_options = "exclude 'META-INF/proguard/androidx-*.pro'", "exclude 'META-INF/common.kotlin_module'"
 android.add_packaging_options = "exclude 'META-INF/proguard/androidx-*.pro'", "exclude 'META-INF/common.kotlin_module'"
 
@@ -423,41 +413,3 @@ warn_on_root = 1
 
 # (str) Path to build output (i.e. .apk, .aab, .ipa) storage
 # bin_dir = ./bin
-
-#    -----------------------------------------------------------------------------
-#    List as sections
-#
-#    You can define all the "list" as [section:key].
-#    Each line will be considered as a option to the list.
-#    Let's take [app] / source.exclude_patterns.
-#    Instead of doing:
-#
-#[app]
-#source.exclude_patterns = license,data/audio/*.wav,data/images/original/*
-#
-#    This can be translated into:
-#
-#[app:source.exclude_patterns]
-#license
-#data/audio/*.wav
-#data/images/original/*
-#
-
-
-#    -----------------------------------------------------------------------------
-#    Profiles
-#
-#    You can extend section / key with a profile
-#    For example, you want to deploy a demo version of your application without
-#    HD content. You could first change the title to add "(demo)" in the name
-#    and extend the excluded directories to remove the HD content.
-#
-#[app@demo]
-#title = My Application (demo)
-#
-#[app:source.exclude_patterns@demo]
-#images/hd/*
-#
-#    Then, invoke the command line with the "demo" profile:
-#
-#buildozer --profile demo android debug
