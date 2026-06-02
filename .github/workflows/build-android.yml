@@ -30,7 +30,7 @@ jobs:
           build-essential \
           ccache \
           git \
-          libncurses5 \
+          libncurses6 \
           libstdc++6 \
           libsdl2-dev \
           libsdl2-image-dev \
