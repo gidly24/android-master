@@ -40,7 +40,13 @@ jobs:
           libswscale-dev \
           libavformat-dev \
           libavcodec-dev \
-          zlib1g-dev
+          zlib1g-dev \
+          libtool \
+          autoconf \
+          automake \
+          pkg-config \
+          libffi-dev \
+          libssl-dev
 
     - name: Install Python dependencies
       run: |
