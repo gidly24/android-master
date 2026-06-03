@@ -213,18 +213,14 @@ class TaskControlApp(App):
             self.archive_tab.set_palette(fill_color=M3_PRIMARY)
 
     def on_start(self):
-        self._request_android_permissions()
+        self._request_android_permissions()  # она сама вызовет _schedule_all_reminders через callback
         self._setup_notification_channel()
         self.check_intent_for_task()
 
         if platform == "android":
             from android.activity import bind as android_bind
             android_bind(on_new_intent=lambda intent: Clock.schedule_once(self.check_intent_for_task, 0.5))
-
-            if check_permission(Permission.SCHEDULE_EXACT_ALARM):
-                self._schedule_all_reminders()
-            else:
-                print("Permission SCHEDULE_EXACT_ALARM is not available. Exact reminders are skipped.")
+            # УБЕРИ блок с check_permission и _schedule_all_reminders отсюда
 
         Clock.schedule_once(self._force_layout_pass, 0)
         Window.bind(size=lambda *_: Clock.schedule_once(self._force_layout_pass, 0))
@@ -367,23 +363,27 @@ class TaskControlApp(App):
             alarm_manager.cancel(pending_intent)
 
     def _request_android_permissions(self):
-        """Запрашивает необходимые разрешения на Android"""
         if platform != "android":
             return
-
         try:
             from android.permissions import request_permissions, Permission
-            permissions = [Permission.POST_NOTIFICATIONS]
-            
-            def callback(permissions, results):
-                if all(results):
-                    print("[Разрешения] Уведомления разрешены")
-                else:
-                    print("[Разрешения] Уведомления отклонены")
+            from android import api_version
 
-            request_permissions(permissions, callback)
+            permissions = []
+            if api_version >= 33:  # Android 13+
+                permissions.append(Permission.POST_NOTIFICATIONS)
+
+            def callback(perms, results):
+                print(f"[Разрешения] результат: {results}")
+                self._schedule_all_reminders()
+
+            if permissions:
+                request_permissions(permissions, callback)
+            else:
+                self._schedule_all_reminders()
         except Exception as e:
-            print(f"[Разрешения] Ошибка при запросе: {e}")
+            print(f"[Разрешения] Ошибка: {e}")
+            self._schedule_all_reminders()
 
     def _setup_notification_channel(self):
         if platform != "android":
