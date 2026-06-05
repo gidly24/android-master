@@ -1,64 +1,13 @@
 from pathlib import Path
 import sys
-import traceback
 import os
-import ssl
-
-# Устанавливаем путь к сертификатам для SSL (только если certifi доступен)
-try:
-    import certifi
-    os.environ['SSL_CERT_FILE'] = certifi.where()
-except Exception:
-    pass
+from datetime import datetime
 
 def global_exception_handler(exctype, value, tb):
-    error_msg = ''.join(traceback.format_exception(exctype, value, tb))
-    try:
-        with open('/sdcard/app_crash.log', 'a') as f:
-            f.write(error_msg + '\n')
-    except:
-        pass
-    sys.__excepthook__(exctype, value, tb)
-
+    pass
 
 sys.excepthook = global_exception_handler
 from kivy.config import Config
-
-
-def load_env_file():
-    # На Android Path(__file__).parent может указывать на разные места
-    possible_paths = [
-        Path(__file__).parent / "config.env",
-        Path(".") / "config.env"
-    ]
-    
-    env_path = None
-    for p in possible_paths:
-        if p.exists():
-            env_path = p
-            break
-            
-    if env_path:
-        with open(env_path) as f:
-            for line in f:
-                line = line.strip()
-                if line and not line.startswith("#") and "=" in line:
-                    key, value = line.split("=", 1)
-                    os.environ[key.strip()] = value.strip()
-
-
-load_env_file()
-
-if sys.platform == "win32":
-    try:
-        import ctypes
-
-        ctypes.windll.shcore.SetProcessDpiAwareness(2)
-    except Exception:
-        try:
-            ctypes.windll.user32.SetProcessDPIAware()
-        except Exception:
-            pass
 
 Config.set("graphics", "multisamples", "8")
 
@@ -82,83 +31,34 @@ from ui.components import (
     MaterialRoot,
 )
 from ui.screens import ArchiveScreen, TaskListScreen
-if platform == "android":
-    class Permission:
-        SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
-
-    try:
-        from android.permissions import request_permissions as _request_permissions
-    except Exception:
-        _request_permissions = None
-
-    try:
-        from android.permissions import check_permission as _check_permission
-    except Exception:
-        _check_permission = None
-
-    def request_permissions(perms, callback=None):
-        if _request_permissions is None:
-            if callback:
-                callback(perms, [False] * len(perms))
-            return
-        _request_permissions(perms, callback)
-
-    def check_permission(perm):
-        if _check_permission is not None:
-            try:
-                return _check_permission(perm)
-            except Exception:
-                pass
-
-        if perm == Permission.SCHEDULE_EXACT_ALARM:
-            try:
-                from android import api_version
-                if api_version < 31:
-                    return True
-
-                from jnius import autoclass, cast
-                Context = autoclass("android.content.Context")
-                PythonActivity = autoclass("org.kivy.android.PythonActivity")
-                context = cast("android.content.Context", PythonActivity.mActivity)
-                alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
-                return bool(alarm_manager and alarm_manager.canScheduleExactAlarms())
-            except Exception:
-                return False
-
-        return False
-else:
-    # Заглушки для локального запуска на ПК
-    def request_permissions(perms, callback=None):
-        if callback:
-            callback(perms, [True]*len(perms))
-
-    class Permission:
-        SCHEDULE_EXACT_ALARM = "android.permission.SCHEDULE_EXACT_ALARM"
-
-    def check_permission(perm):
-        return True
 
 
 class TaskControlApp(App):
+    def _load_config(self):
+        config_path = Path(__file__).resolve().parent / "config.env"
+        if config_path.exists():
+            with open(config_path, "r") as f:
+                for line in f:
+                    if "=" in line:
+                        key, value = line.strip().split("=", 1)
+                        os.environ[key.strip()] = value.strip()
+
     def build(self):
+        self._load_config()
         self.title = "Task Control"
         Window.clearcolor = APP_BACKGROUND
         Window.softinput_mode = "below_target"
-        if platform not in ("android", "ios"):
-            Window.size = (430, 780)
 
         database_path = Path(__file__).resolve().parent / "tasks.db"
         self.database = DatabaseManager(database_path)
-        self.service = TaskService(self.database, self._schedule_task_reminder)
+        self.service = TaskService(self.database, self._show_notification)
         self.service.initialize_demo_data()
 
         try:
             self.ai_assistant = AIAssistant(task_service=self.service)
-        except ValueError as e:
-            print(f"Error initializing AI Assistant: {e}")
+        except ValueError:
             self.ai_assistant = None
-        except Exception as e:
-            print(f"An unexpected error occurred during AI Assistant initialization: {e}")
+        except Exception:
             self.ai_assistant = None
 
         self.chat_modal = ChatModal(
@@ -170,20 +70,9 @@ class TaskControlApp(App):
 
         root = MaterialRoot(orientation="vertical", spacing=dp(16), padding=dp(16))
 
-        # --- Табы ---
         tabs = BoxLayout(size_hint_y=None, height=dp(48), spacing=dp(2))
-        self.tasks_tab = MaterialButton(
-            text="Задачи",
-            fill_color=M3_PRIMARY,
-            radius=0,
-            height=dp(48)
-        )
-        self.archive_tab = MaterialButton(
-            text="Архив",
-            fill_color=POPUP_SURFACE,
-            radius=0,
-            height=dp(48)
-        )
+        self.tasks_tab = MaterialButton(text="Задачи", fill_color=M3_PRIMARY, radius=0, height=dp(48))
+        self.archive_tab = MaterialButton(text="Архив", fill_color=POPUP_SURFACE, radius=0, height=dp(48))
         self.tasks_tab.bind(on_release=lambda *_: self.switch_screen("tasks"))
         self.archive_tab.bind(on_release=lambda *_: self.switch_screen("archive"))
         tabs.add_widget(self.tasks_tab)
@@ -195,10 +84,48 @@ class TaskControlApp(App):
         self.root_widget = root
         return root
 
+    def _show_notification(self, task_id, title, due_date, due_time, action="notify"):
+        # This is a placeholder that might need to be implemented for Android specifically,
+        # but the user requested this mechanism.
+        try:
+            from android_notify import Notification
+            if action == "cancel":
+                pass # Handle cancellation if needed
+            else:
+                Notification(
+                    title=f"Пора приступать: {title}",
+                    message=f"Задача '{title}' должна быть выполнена сейчас ({due_date} {due_time})."
+                ).send()
+        except Exception as e:
+            print(f"Ошибка уведомления: {e}")
+
+    def _check_deadlines(self, dt):
+        now = datetime.now()
+        date_str = now.strftime("%Y-%m-%d")
+        time_str = now.strftime("%H:%M")
+
+        tasks = self.database.get_tasks_due_at(date_str, time_str)
+        for task in tasks:
+            self._show_notification(task.id, task.title, task.due_date, task.due_time)
+
+    def _request_android_notification_permission(self):
+        if platform != "android":
+            return
+
+        try:
+            from android import api_version
+            if api_version < 33:
+                return
+
+            from android.permissions import Permission, check_permission, request_permissions
+            if not check_permission(Permission.POST_NOTIFICATIONS):
+                request_permissions([Permission.POST_NOTIFICATIONS])
+        except Exception as e:
+            print(f"Failed to request notification permission: {e}")
+
     def switch_screen(self, name):
         if self.screen_manager.current == name:
             return
-
         direction = "left" if name == "archive" else "right"
         self.screen_manager.transition.direction = direction
         self.screen_manager.current = name
@@ -213,27 +140,14 @@ class TaskControlApp(App):
             self.archive_tab.set_palette(fill_color=M3_PRIMARY)
 
     def on_start(self):
-        self._request_android_permissions()  # она сама вызовет _schedule_all_reminders через callback
-        self._setup_notification_channel()
-        self.check_intent_for_task()
-
-        if platform == "android":
-            from android.activity import bind as android_bind
-            android_bind(on_new_intent=lambda intent: Clock.schedule_once(self.check_intent_for_task, 0.5))
-            # УБЕРИ блок с check_permission и _schedule_all_reminders отсюда
+        self._request_android_notification_permission()
+        self.service.reschedule_android_alarms()
 
         Clock.schedule_once(self._force_layout_pass, 0)
         Window.bind(size=lambda *_: Clock.schedule_once(self._force_layout_pass, 0))
 
-        if platform == "android":
-            Clock.schedule_once(self._send_test_notification, 10)
-
-    def _on_permission_result(self, permissions, grant_results):
-        if grant_results and all(grant_results):
-            print("Permission SCHEDULE_EXACT_ALARM granted, scheduling reminders.")
-            self._schedule_all_reminders()
-        else:
-            print("Permission SCHEDULE_EXACT_ALARM denied. Exact alarms won't work.")
+        if platform != "android":
+            Clock.schedule_interval(self._check_deadlines, 60)
 
     def _build_screens(self):
         self.screen_manager = ScreenManager(transition=SlideTransition(direction='left'))
@@ -258,8 +172,6 @@ class TaskControlApp(App):
         self.task_list_screen._update_batch_actions_visibility()
         self.archive_screen.selected_task_ids.clear()
         self.archive_screen._update_batch_actions_visibility()
-
-        current = self.screen_manager.current
         self.task_list_screen.refresh_tasks()
         self.archive_screen.refresh_archive()
 
@@ -271,266 +183,9 @@ class TaskControlApp(App):
         if not self.chat_modal._window:
             self.chat_modal.open()
 
-    def _send_test_notification(self, *args):
-        """Тестовое уведомление через AlarmManager через 15 секунд для проверки BroadcastReceiver"""
-        if platform != "android":
-            return
-        try:
-            from jnius import autoclass, cast
-            from datetime import datetime, timedelta
-
-            Context = autoclass("android.content.Context")
-            Intent = autoclass("android.content.Intent")
-            PendingIntent = autoclass("android.app.PendingIntent")
-            AlarmManager = autoclass("android.app.AlarmManager")
-
-            python_activity = autoclass("org.kivy.android.PythonActivity")
-            context = cast("android.content.Context", python_activity.mActivity)
-
-            trigger_time = datetime.now() + timedelta(seconds=15)
-            trigger_millis = int(trigger_time.timestamp() * 1000)
-
-            intent = Intent()
-            intent.setClassName(context.getPackageName(), "org.kivy.android.PythonBroadcastReceiver")
-            intent.setAction("com.taskcontrol.reminder")
-            intent.putExtra("task_id", 999999)
-            intent.putExtra("title", "Тестовое уведомление")
-            intent.putExtra("type", "start")
-
-            flags = PendingIntent.FLAG_UPDATE_CURRENT
-            if hasattr(PendingIntent, "FLAG_IMMUTABLE"):
-                flags |= PendingIntent.FLAG_IMMUTABLE
-
-            pending_intent = PendingIntent.getBroadcast(context, 999999, intent, flags)
-
-            alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
-            alarm_manager.setExactAndAllowWhileIdle(
-                AlarmManager.RTC_WAKEUP,
-                trigger_millis,
-                pending_intent
-            )
-            print(f"[Test] Scheduled test notification at {trigger_time}")
-        except Exception as e:
-            print(f"[Test] Failed to schedule test notification: {e}")
-
     def _force_layout_pass(self, *_):
         if hasattr(self.root_widget, "do_layout"):
             self.root_widget.do_layout()
-
-    def _schedule_all_reminders(self):
-        tasks = self.service.database.get_all_tasks()
-        for task in tasks:
-            if not task.is_archived and task.due_date:
-                self._schedule_reminder(task.id, task.title, task.due_date, task.due_time, "start")
-                self._schedule_reminder(task.id, task.title, task.due_date, task.due_time, "before")
-
-    def _schedule_task_reminder(self, task_id: int, title: str, due_date: str, due_time: str, action="schedule"):
-        if action == "cancel":
-            self._cancel_reminders(task_id)
-        else:
-            self._schedule_reminder(task_id, title, due_date, due_time, "start")
-            self._schedule_reminder(task_id, title, due_date, due_time, "before")
-
-    def _cancel_reminders(self, task_id: int):
-        if platform != "android":
-            return
-
-        from jnius import autoclass, cast
-        PendingIntent = autoclass("android.app.PendingIntent")
-        AlarmManager = autoclass("android.app.AlarmManager")
-        Context = autoclass("android.content.Context")
-        Intent = autoclass("android.content.Intent")
-
-        python_activity = autoclass("org.kivy.android.PythonActivity")
-        context = cast("android.content.Context", python_activity.mActivity)
-
-        for reminder_type in ["start", "before"]:
-            req_code = task_id * (1 if reminder_type == "start" else 2)
-
-            intent = Intent()
-            intent.setClassName(context.getPackageName(), "org.kivy.android.PythonBroadcastReceiver")
-            intent.setAction("com.taskcontrol.reminder")
-            intent.putExtra("task_id", task_id)
-            intent.putExtra("type", reminder_type)
-
-            flags = PendingIntent.FLAG_UPDATE_CURRENT
-            if hasattr(PendingIntent, "FLAG_IMMUTABLE"):
-                flags |= PendingIntent.FLAG_IMMUTABLE
-
-            pending_intent = PendingIntent.getBroadcast(context, req_code, intent, flags)
-
-            alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
-            alarm_manager.cancel(pending_intent)
-
-    def _request_android_permissions(self):
-        if platform != "android":
-            return
-        try:
-            from android.permissions import request_permissions, Permission
-            from android import api_version
-
-            permissions = []
-            if api_version >= 33:  # Android 13+
-                permissions.append(Permission.POST_NOTIFICATIONS)
-
-            def callback(perms, results):
-                print(f"[Разрешения] результат: {results}")
-                self._schedule_all_reminders()
-
-            if permissions:
-                request_permissions(permissions, callback)
-            else:
-                self._schedule_all_reminders()
-        except Exception as e:
-            print(f"[Разрешения] Ошибка: {e}")
-            self._schedule_all_reminders()
-
-    def _setup_notification_channel(self):
-        if platform != "android":
-            return
-
-        from jnius import autoclass, cast
-        from android import api_version
-
-        if api_version < 26:
-            return
-
-        NotificationManager = autoclass("android.app.NotificationManager")
-        NotificationChannel = autoclass("android.app.NotificationChannel")
-        Context = autoclass("android.content.Context")
-
-        context = cast("android.content.Context", autoclass("org.kivy.android.PythonActivity").mActivity)
-        channel_id = "task_reminder_channel"
-        channel_name = "Напоминания о задачах"
-        channel_description = "Уведомления о предстоящих задачах"
-        importance = NotificationManager.IMPORTANCE_HIGH
-
-        notification_channel = NotificationChannel(channel_id, channel_name, importance)
-        notification_channel.setDescription(channel_description)
-
-        notification_service = context.getSystemService(Context.NOTIFICATION_SERVICE)
-        notification_service.createNotificationChannel(notification_channel)
-
-    def _show_notification(self, title, message, task_id=None):
-        if platform != "android":
-            return
-
-        from jnius import autoclass, cast
-        from android import api_version
-
-        Context = autoclass("android.content.Context")
-        PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        context = cast("android.content.Context", PythonActivity.mActivity)
-
-        NotificationCompat = autoclass("androidx.core.app.NotificationCompat")
-        NotificationManager = autoclass("android.app.NotificationManager")
-        Intent = autoclass("android.content.Intent")
-        PendingIntent = autoclass("android.app.PendingIntent")
-
-        notification_intent = Intent(context, PythonActivity)
-        notification_intent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP)
-
-        if task_id:
-            notification_intent.putExtra("open_task_id", task_id)
-
-        pending_flags = PendingIntent.FLAG_UPDATE_CURRENT
-        if hasattr(PendingIntent, "FLAG_IMMUTABLE"):
-            pending_flags |= PendingIntent.FLAG_IMMUTABLE
-
-        req_code = task_id or 0
-        content_intent = PendingIntent.getActivity(
-            context, req_code, notification_intent, pending_flags
-        )
-
-        builder = NotificationCompat.Builder(context, "task_reminder_channel")
-        builder.setContentTitle(title)
-        builder.setContentText(message)
-        builder.setSmallIcon(context.getApplicationInfo().icon)
-        builder.setAutoCancel(True)
-        builder.setContentIntent(content_intent)
-
-        if api_version >= 26:
-            builder.setChannelId("task_reminder_channel")
-
-        notification = builder.build()
-        notification_service = context.getSystemService(Context.NOTIFICATION_SERVICE)
-        notification_service.notify(req_code, notification)
-
-    def _schedule_reminder(self, task_id: int, title: str, due_date: str, due_time: str,
-                           reminder_type: str = "start"):
-        if platform != "android":
-            return
-
-        # Проверяем разрешение перед установкой будильника
-        if not check_permission(Permission.SCHEDULE_EXACT_ALARM):
-            print(f"Missing SCHEDULE_EXACT_ALARM, skipping reminder for task {task_id}")
-            return
-
-        from jnius import autoclass, cast
-        from datetime import datetime, timedelta
-
-        if not due_date:
-            return
-
-        try:
-            time_str = due_time if due_time else "00:00"
-            dt = datetime.fromisoformat(f"{due_date}T{time_str}")
-        except (ValueError, TypeError):
-            return
-
-        if reminder_type == "before":
-            trigger_time = dt - timedelta(hours=1)
-        else:
-            trigger_time = dt
-
-        if trigger_time < datetime.now():
-            return
-
-        trigger_millis = int(trigger_time.timestamp() * 1000)
-
-        Context = autoclass("android.content.Context")
-        Intent = autoclass("android.content.Intent")
-        PendingIntent = autoclass("android.app.PendingIntent")
-        AlarmManager = autoclass("android.app.AlarmManager")
-
-        python_activity = autoclass("org.kivy.android.PythonActivity")
-        context = cast("android.content.Context", python_activity.mActivity)
-
-        intent = Intent()
-        intent.setClassName(context.getPackageName(), "org.kivy.android.PythonBroadcastReceiver")
-        intent.setAction("com.taskcontrol.reminder")
-        intent.putExtra("task_id", task_id)
-        intent.putExtra("title", title if title else "")
-        intent.putExtra("type", reminder_type)
-
-        flags = PendingIntent.FLAG_UPDATE_CURRENT
-        if hasattr(PendingIntent, "FLAG_IMMUTABLE"):
-            flags |= PendingIntent.FLAG_IMMUTABLE
-
-        req_code = task_id * (1 if reminder_type == "start" else 2)
-        pending_intent = PendingIntent.getBroadcast(context, req_code, intent, flags)
-
-        alarm_manager = context.getSystemService(Context.ALARM_SERVICE)
-        alarm_manager.setExactAndAllowWhileIdle(
-            AlarmManager.RTC_WAKEUP,
-            trigger_millis,
-            pending_intent
-        )
-        print(f"[Reminder] Scheduled {reminder_type} for task {task_id} '{title}' at {trigger_time} (millis={trigger_millis})")
-
-    def check_intent_for_task(self, *args):
-        if platform != "android":
-            return
-
-        from jnius import autoclass
-        PythonActivity = autoclass("org.kivy.android.PythonActivity")
-        activity = PythonActivity.mActivity
-        intent = activity.getIntent()
-
-        if intent and intent.hasExtra("open_task_id"):
-            task_id = intent.getIntExtra("open_task_id", 0)
-            print(f"[Уведомления] Кликнули по задаче с ID: {task_id}")
-            intent.removeExtra("open_task_id")
 
 
 if __name__ == "__main__":

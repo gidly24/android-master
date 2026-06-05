@@ -9,6 +9,7 @@ class TaskService:
     """Business logic for task management."""
 
     DEMO_DATA_STATE_KEY = "demo_data_initialized"
+    ANDROID_ALARM_ACTION = "org.example.taskcontrol.TASK_ALARM"
 
     def __init__(self, database, notification_callback=None):
         self.database = database
@@ -119,6 +120,137 @@ class TaskService:
         normalized_search = search_text.lower().strip()
         return [task for task in tasks if normalized_search in task.title.lower()]
 
+    def _cancel_android_alarm(self, task_id: int):
+        if platform != "android" or task_id is None:
+            return
+
+        try:
+            from jnius import autoclass, cast
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            AlarmManager = autoclass("android.app.AlarmManager")
+            PendingIntent = autoclass("android.app.PendingIntent")
+            Intent = autoclass("android.content.Intent")
+            Context = autoclass("android.content.Context")
+            BuildVersion = autoclass("android.os.Build$VERSION")
+            receiver_class = autoclass("org.kivy.android.PythonBroadcastReceiver")
+
+            activity = PythonActivity.mActivity
+            alarm_manager = cast(
+                "android.app.AlarmManager",
+                activity.getSystemService(Context.ALARM_SERVICE),
+            )
+
+            flags = PendingIntent.FLAG_NO_CREATE
+            if BuildVersion.SDK_INT >= 23:
+                flags |= PendingIntent.FLAG_IMMUTABLE
+
+            request_codes = {int(task_id), int(task_id) * 2}
+            actions = (self.ANDROID_ALARM_ACTION, "com.taskcontrol.reminder", None)
+            for request_code in request_codes:
+                for action in actions:
+                    intent = Intent(activity, receiver_class)
+                    if action:
+                        intent.setAction(action)
+                    pending_intent = PendingIntent.getBroadcast(
+                        activity,
+                        request_code,
+                        intent,
+                        flags,
+                    )
+                    if pending_intent:
+                        alarm_manager.cancel(pending_intent)
+                        pending_intent.cancel()
+        except Exception as e:
+            print(f"Failed to cancel alarm: {e}")
+
+    def _schedule_android_alarm(self, task: Task):
+        if task.id is None:
+            return
+
+        self._cancel_android_alarm(task.id)
+        if (
+            platform != "android"
+            or not task.due_date
+            or task.is_archived
+            or task.status == "выполнена"
+        ):
+            return
+
+        due_at = self.parse_due_datetime(task.due_date, task.due_time)
+        if due_at <= datetime.now():
+            return
+
+        try:
+            from jnius import autoclass, cast
+            print(f"DEBUG: Scheduling alarm for task: id={task.id}, title='{task.title}'")
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            AlarmManager = autoclass("android.app.AlarmManager")
+            PendingIntent = autoclass("android.app.PendingIntent")
+            Intent = autoclass("android.content.Intent")
+            Context = autoclass("android.content.Context")
+            BuildVersion = autoclass("android.os.Build$VERSION")
+            receiver_class = autoclass("org.kivy.android.PythonBroadcastReceiver")
+
+            activity = PythonActivity.mActivity
+            intent = Intent(activity, receiver_class)
+            intent.setAction(self.ANDROID_ALARM_ACTION)
+            intent.putExtra("title", task.title)
+            intent.putExtra("task_id", int(task.id))
+            intent.putExtra("type", "exact")
+            print(f"DEBUG: Intent created with title='{task.title}', task_id={task.id}")
+
+            flags = PendingIntent.FLAG_UPDATE_CURRENT
+            if BuildVersion.SDK_INT >= 23:
+                flags |= PendingIntent.FLAG_IMMUTABLE
+
+            pending_intent = PendingIntent.getBroadcast(
+                activity,
+                int(task.id),
+                intent,
+                flags,
+            )
+            print(f"DEBUG: PendingIntent created for request code {int(task.id)}")
+
+            alarm_manager = cast(
+                "android.app.AlarmManager",
+                activity.getSystemService(Context.ALARM_SERVICE),
+            )
+            trigger_at = int(due_at.timestamp() * 1000)
+
+            if BuildVersion.SDK_INT >= 31 and not alarm_manager.canScheduleExactAlarms():
+                if BuildVersion.SDK_INT >= 23:
+                    alarm_manager.setAndAllowWhileIdle(
+                        AlarmManager.RTC_WAKEUP,
+                        trigger_at,
+                        pending_intent,
+                    )
+                else:
+                    alarm_manager.set(AlarmManager.RTC_WAKEUP, trigger_at, pending_intent)
+            elif BuildVersion.SDK_INT >= 23:
+                alarm_manager.setExactAndAllowWhileIdle(
+                    AlarmManager.RTC_WAKEUP,
+                    trigger_at,
+                    pending_intent,
+                )
+            elif BuildVersion.SDK_INT >= 19:
+                alarm_manager.setExact(AlarmManager.RTC_WAKEUP, trigger_at, pending_intent)
+            else:
+                alarm_manager.set(AlarmManager.RTC_WAKEUP, trigger_at, pending_intent)
+        except Exception as e:
+            print(f"Failed to schedule alarm: {e}")
+
+    def reschedule_android_alarms(self):
+        if platform != "android":
+            return
+
+        for task in self.database.get_all_tasks():
+            if task.is_archived or task.status == "выполнена" or not task.due_date:
+                self._cancel_android_alarm(task.id)
+            else:
+                self._schedule_android_alarm(task)
+
     def save_task(self, task_data: dict, task_id=None):
         self._validate_task_data(task_data)
         existing_task = self.database.get_task(task_id) if task_id else None
@@ -143,23 +275,17 @@ class TaskService:
 
         if task_id is None:
             new_task_id = self.database.create_task(task)
-            # Планируем уведомления для новой задачи
-            if self.notification_callback and task.due_date:
-                self.notification_callback(new_task_id, task.title, task.due_date, task.due_time)
+            task.id = new_task_id
+            self._schedule_android_alarm(task)
             return new_task_id
 
         # Для обновленных задач планируем уведомления, если есть due_date
         self.database.update_task(task)
-        if self.notification_callback and task.due_date:
-            self.notification_callback(task_id, task.title, task.due_date, task.due_time)
+        self._schedule_android_alarm(task)
         return task_id
 
     def delete_task(self, task_id: int):
-        task = self.database.get_task(task_id)
-        if task:
-            # Отменяем уведомления перед удалением
-            if self.notification_callback:
-                self.notification_callback(task_id, task.title, task.due_date, task.due_time, "cancel")
+        self._cancel_android_alarm(task_id)
         self.database.delete_task(task_id)
 
     def restore_task(self, task_id: int):
@@ -168,17 +294,12 @@ class TaskService:
             task.status = "активна"
             task.is_archived = 0
             task.archived_at = None
-            self.database.update_task(task)  # или отдельный restore_task в database
-            # Планируем уведомления для восстановленной задачи
-            if self.notification_callback and task.due_date:
-                self.notification_callback(task_id, task.title, task.due_date, task.due_time)
+            self.database.update_task(task)
+            self._schedule_android_alarm(task)
 
     def clear_archived_tasks(self):
-        # Отменяем уведомления для всех архивных задач
-        if self.notification_callback:
-            archived_tasks = self.database.get_archived_tasks()
-            for task in archived_tasks:
-                self.notification_callback(task.id, task.title, task.due_date, task.due_time, "cancel")
+        for task in self.database.get_archived_tasks():
+            self._cancel_android_alarm(task.id)
         self.database.clear_archived_tasks()
 
     def find_tasks_by_title(self, title_query: str, include_archived: bool = False):
@@ -213,22 +334,15 @@ class TaskService:
             task.is_archived = 1
             task.archived_at = datetime.now().isoformat(timespec="seconds")
             self.database.update_task(task)
-            # Отменяем уведомления для выполненной задачи
-            if self.notification_callback:
-                self.notification_callback(task_id, task.title, task.due_date, task.due_time, "cancel")
+            self._cancel_android_alarm(task_id)
         else:
-            old_due_date = task.due_date
-            old_due_time = task.due_time
             task.due_date = self.get_next_due_date(task.due_date, task.recurrence)
             task.due_time = task.due_time or ""
             task.status = "активна"
             task.is_archived = 0
             task.archived_at = None
             self.database.update_task(task)
-            # Отменяем старые уведомления и планируем новые для повторяющейся задачи
-            if self.notification_callback:
-                self.notification_callback(task_id, task.title, old_due_date, old_due_time, "cancel")
-                self.notification_callback(task_id, task.title, task.due_date, task.due_time)
+            self._schedule_android_alarm(task)
 
     def update_overdue_tasks(self):
         now_iso = datetime.now().strftime("%Y-%m-%d %H:%M")

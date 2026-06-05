@@ -266,6 +266,14 @@ class DatabaseManager:
             ).fetchall()
         return [self._row_to_task(row) for row in rows]
 
+    def get_tasks_due_at(self, date_str: str, time_str: str):
+        with self._connect() as connection:
+            rows = connection.execute(
+                "SELECT * FROM tasks WHERE is_archived = 0 AND due_date = ? AND due_time = ? AND status = 'активна'",
+                (date_str, time_str),
+            ).fetchall()
+        return [self._row_to_task(row) for row in rows]
+
     def count_tasks(self) -> int:
         with self._connect() as connection:
             row = connection.execute("SELECT COUNT(*) AS amount FROM tasks").fetchone()
