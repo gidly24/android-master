@@ -415,33 +415,15 @@ class TaskService:
         }
 
     def create_task_from_ai(self, payload: dict):
-        due_date_part = (payload.get("due_date") or "").strip()
-        due_time_part = (payload.get("due_time") or "").strip()
-
-        # Handle case where AI might send full ISO in due_date
-        if " " in due_date_part or "T" in due_date_part:
-            normalized_due = due_date_part.replace("T", " ")
-            due_date_part, time_val = normalized_due.split(" ", 1)
-            if not due_time_part:
-                due_time_part = time_val[:5]
-
-        recurrence_key = (payload.get("recurrence") or "").strip().lower()
-        recurrence_map = {
-            "": "одноразовая",
-            "ежедневно": "ежедневно",
-            "еженедельно": "еженедельно",
-            "ежемесячно": "ежемесячно",
-        }
-
         priority_label = self._priority_from_ai(payload.get("priority"), "средний")
 
         task_data = {
             "title": (payload.get("title") or "").strip().capitalize(),
             "description": (payload.get("description") or "Создано через ИИ-чат").strip(),
             "category": (payload.get("category") or "другое").strip().lower(),
-            "due_date": due_date_part,
-            "due_time": due_time_part,
-            "recurrence": recurrence_map.get(recurrence_key, "одноразовая"),
+            "due_date": (payload.get("due_date") or "").strip(),
+            "due_time": (payload.get("due_time") or "").strip(),
+            "recurrence": "одноразовая",
             "priority": priority_label,
             "status": "активна",
         }
@@ -455,81 +437,61 @@ class TaskService:
             "answer": f"Готово, добавил задачу{' на ' + due_at_label if due_at_label else ''}.",
         }
 
-    def delete_task_from_ai(self, payload: dict):
+    def _find_task_or_clarify(self, payload, action_name, pending_action_type):
         task_id = payload.get("task_id")
         if task_id:
             task = self.get_task(int(task_id))
-            if not task:
-                return {"action": "clarify", "answer": "Не нашел такую задачу."}
-            self.delete_task(task.id)
-            return {"deleted": True, "task_id": task.id, "answer": f"Готово, удалил задачу «{task.title}»."}
+            if task:
+                return task, None
+            return None, {"action": "clarify", "answer": "Не нашел такую задачу."}
 
         title_query = payload.get("title_query", "")
         active_tasks = self.get_tasks()
         if not active_tasks:
-            return {"action": "clarify", "answer": "Активных задач сейчас нет."}
+            return None, {"action": "clarify", "answer": "Активных задач сейчас нет."}
+
+        # If no specific title_query, show list instead of just asking
         if not title_query:
-            return {
+            return None, {
                 "action": "clarify",
-                "pending_action": "delete_task",
+                "pending_action": pending_action_type,
                 "payload": {},
-                "candidates": [self._task_to_ai_dict(task) for task in active_tasks[:7]],
-                "answer": self._build_candidates_answer(active_tasks[:7], "Какую задачу удалить?"),
+                "candidates": [self._task_to_ai_dict(t) for t in active_tasks],
+                "answer": self._build_candidates_answer(active_tasks, f"Какую задачу {action_name}?"),
             }
+        
         matches = self.find_tasks_by_title(title_query)
         if not matches:
-            return {"action": "clarify", "answer": "Не нашел задачу с таким названием. Могу показать активные задачи для выбора."}
+            return None, {"action": "clarify", "answer": "Не нашел задачу с таким названием. Могу показать активные задачи для выбора."}
         if len(matches) > 1:
-            return {
+            return None, {
                 "action": "clarify",
-                "pending_action": "delete_task",
+                "pending_action": pending_action_type,
                 "payload": {},
-                "candidates": [self._task_to_ai_dict(task) for task in matches[:7]],
-                "answer": self._build_candidates_answer(matches[:7], "Какую задачу удалить?"),
+                "candidates": [self._task_to_ai_dict(t) for t in matches],
+                "answer": self._build_candidates_answer(matches, f"Нашел несколько подходящих задач, какую {action_name}?"),
             }
 
-        task = matches[0]
+        return matches[0], None
+
+    def delete_task_from_ai(self, payload: dict):
+        task, error_response = self._find_task_or_clarify(payload, "удалить", "delete_task")
+        if error_response:
+            return error_response
+        
         self.delete_task(task.id)
         return {"deleted": True, "task_id": task.id, "answer": f"Готово, удалил задачу «{task.title}»."}
 
     def mark_task_done_from_ai(self, payload: dict):
-        task_id = payload.get("task_id")
-        if task_id:
-            task = self.get_task(int(task_id))
-            if not task:
-                return {"action": "clarify", "answer": "Не нашел такую задачу."}
-            self.mark_task_done(task.id)
-            return {"completed": True, "task_id": task.id, "answer": f"Готово, отметил «{task.title}» как выполненную."}
-
-        title_query = payload.get("title_query", "")
-        active_tasks = self.get_tasks()
-        if not active_tasks:
-            return {"action": "clarify", "answer": "Активных задач сейчас нет."}
-        if not title_query:
-            return {
-                "action": "clarify",
-                "pending_action": "mark_as_done",
-                "payload": {},
-                "candidates": [self._task_to_ai_dict(task) for task in active_tasks[:7]],
-                "answer": self._build_candidates_answer(active_tasks[:7], "Какую задачу отметить выполненной?"),
-            }
-        matches = self.find_tasks_by_title(title_query)
-        if not matches:
-            return {"action": "clarify", "answer": "Не нашел задачу с таким названием. Могу показать активные задачи для выбора."}
-        if len(matches) > 1:
-            return {
-                "action": "clarify",
-                "pending_action": "mark_as_done",
-                "payload": {},
-                "candidates": [self._task_to_ai_dict(task) for task in matches[:7]],
-                "answer": self._build_candidates_answer(matches[:7], "Какую задачу отметить выполненной?"),
-            }
-
-        task = matches[0]
+        task, error_response = self._find_task_or_clarify(payload, "отметить выполненной", "mark_as_done")
+        if error_response:
+            return error_response
+        
         self.mark_task_done(task.id)
         return {"completed": True, "task_id": task.id, "answer": f"Готово, отметил «{task.title}» как выполненную."}
 
     def update_task_from_ai(self, payload: dict):
+        # Specific handling for update due to potential payload in clarify response
         task_id = payload.get("task_id")
         task = self.get_task(int(task_id)) if task_id else None
         
@@ -537,35 +499,10 @@ class TaskService:
         new_values = payload.get("new_values", {})
         processed_payload = {**payload, **new_values} if isinstance(new_values, dict) else payload
 
-        if task is None:
-            title_query = processed_payload.get("title_query", "")
-            active_tasks = self.get_tasks()
-            if not active_tasks:
-                return {"action": "clarify", "answer": "Активных задач сейчас нет."}
-            if not title_query:
-                update_payload = dict(processed_payload)
-                update_payload.pop("task_id", None)
-                return {
-                    "action": "clarify",
-                    "pending_action": "update_task",
-                    "payload": update_payload,
-                    "candidates": [self._task_to_ai_dict(item) for item in active_tasks[:7]],
-                    "answer": self._build_candidates_answer(active_tasks[:7], "Какую задачу изменить?"),
-                }
-            matches = self.find_tasks_by_title(title_query)
-            if not matches:
-                return {"action": "clarify", "answer": "Не нашел задачу для изменения. Могу показать активные задачи для выбора."}
-            if len(matches) > 1:
-                update_payload = dict(processed_payload)
-                update_payload.pop("task_id", None)
-                return {
-                    "action": "clarify",
-                    "pending_action": "update_task",
-                    "payload": update_payload,
-                    "candidates": [self._task_to_ai_dict(item) for item in matches[:7]],
-                    "answer": self._build_candidates_answer(matches[:7], "Какую задачу изменить?"),
-                }
-            task = matches[0]
+        if not task:
+            task, error_response = self._find_task_or_clarify(processed_payload, "изменить", "update_task")
+            if error_response:
+                return error_response
 
         editable_fields = {"title", "description", "category", "due_date", "due_time", "recurrence", "priority", "clear_due_date"}
         if not any(field in processed_payload for field in editable_fields):
@@ -577,7 +514,7 @@ class TaskService:
             }
 
         task_data = {
-            "title": str(processed_payload.get("title", task.title)).strip() or task.title,
+            "title": str(processed_payload.get("title", task.title)).strip().capitalize(),
             "description": str(processed_payload.get("description", task.description)).strip(),
             "category": str(processed_payload.get("category", task.category)).strip().lower(),
             "due_date": task.due_date,
@@ -586,28 +523,6 @@ class TaskService:
             "priority": self._priority_from_ai(processed_payload.get("priority"), task.priority),
             "status": task.status,
         }
-
-        if processed_payload.get("clear_due_date"):
-            task_data["due_date"] = ""
-            task_data["due_time"] = ""
-        
-        # Priority mapping is already handled by _priority_from_ai called above
-
-        if processed_payload.get("due_date"):
-            normalized_due = str(processed_payload["due_date"]).replace("T", " ").strip()
-            if " " in normalized_due:
-                task_data["due_date"], task_data["due_time"] = normalized_due.split(" ", 1)
-                task_data["due_time"] = task_data["due_time"][:5]
-            else:
-                task_data["due_date"] = normalized_due
-                # If AI also provided due_time explicitly
-                if processed_payload.get("due_time"):
-                    task_data["due_time"] = str(processed_payload["due_time"]).strip()[:5]
-        elif processed_payload.get("due_time"):
-            task_data["due_time"] = str(processed_payload["due_time"]).strip()[:5]
-
-        self.save_task(task_data, task.id)
-        return {"updated": True, "task_id": task.id, "answer": f"Готово, обновил задачу «{task.title}»."}
 
     def list_tasks_for_ai(self, filters: dict):
         tasks = self.get_tasks()

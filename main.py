@@ -39,8 +39,11 @@ class TaskControlApp(App):
         if config_path.exists():
             with open(config_path, "r") as f:
                 for line in f:
+                    line = line.strip()
+                    if not line or line.startswith("#"):
+                        continue
                     if "=" in line:
-                        key, value = line.strip().split("=", 1)
+                        key, value = line.split("=", 1)
                         os.environ[key.strip()] = value.strip()
 
     def build(self):

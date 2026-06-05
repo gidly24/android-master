@@ -3,7 +3,7 @@ import os
 import ssl
 import urllib.request
 import urllib.error
-from datetime import date
+from datetime import date, datetime
 from urllib.error import HTTPError, URLError
 from urllib.parse import urlparse, quote_plus
 
@@ -16,7 +16,9 @@ class AIAssistant:
 
         self.api_url = f"{os.getenv('GOOGLE_GEMINI_BASE_URL', 'https://generativelanguage.googleapis.com')}/v1beta/models/gemini-2.5-flash-lite:generateContent"
         self.task_service = task_service # Store the TaskService instance
-        self.today_date = date.today().isoformat()
+        self.now = datetime.now()
+        self.today_date = self.now.date().isoformat()
+        self.now_time = self.now.strftime("%H:%M")
 
         # Updated system prompt for comprehensive task management
         self.system_prompt = f"""RESPOND ONLY WITH VALID JSON. NO OTHER TEXT.
@@ -24,7 +26,7 @@ class AIAssistant:
 Analyze user text and return a JSON object describing the requested task management operation.
 You must infer the user's intent and provide the most appropriate JSON based on the following structure and rules.
 
-Today's date is {self.today_date}.
+Current date: {self.today_date}. Current time: {self.now_time}.
 
 Available actions: "create", "delete", "mark_done", "update", "list", "get_stats".
 
@@ -33,58 +35,55 @@ JSON Structure:
   "action": "create" | "delete" | "mark_done" | "update" | "list" | "get_stats" | null,
   
   // Fields for "create" action:
-  "title": "task title", // Mandatory. If missing, return an error JSON.
+  "title": "task title", // Mandatory. Formulate as a noun phrase (e.g., "Защита диплома", "Покупка продуктов").
   "description": "extra details or empty string", // Optional.
   "category": "работа|личное|покупки|здоровье|другое", // Infer from context.
-  "due_date": "YYYY-MM-DD" | null, // Parse relative to {self.today_date}. Null if not specified.
-  "due_time": "HH:MM" | null, // Parse relative to {self.today_date}. Null if not specified. If only date, use "23:59".
+  "due_date": "YYYY-MM-DD" | null, // Parse relative to {self.today_date}.
+  "due_time": "HH:MM" | null, // Parse relative to current time {self.now_time}.
   "priority": "низкий|средний|высокий" | "", // Empty string if not specified.
 
-  // Fields for "delete" action:
+  // Fields for "delete" and "mark_done" actions:
   "task_id": integer, // Use if explicitly given.
-  "title_query": "task title to search for and delete", // Use if task_id is not known or provided.
-
-  // Fields for "mark_done" action:
-  "task_id": integer, // Use if explicitly given.
-  "title_query": "task title to search for and mark as done", // Use if task_id is not known or provided. Use for "выполнить", "сделано", "завершить".
+  "title_query": "task title to search for", // Mandatory if task_id is unknown.
 
   // Fields for "update" action:
   "task_id": integer, // Use if explicitly given.
-  "title_query": "task title to search for and update", // Use if task_id is not known or provided.
-  "new_values": {{ // Contains fields to update. Can be partial.
-    "title": "new task title", // Optional
-    "description": "new description", // Optional
-    "category": "new category", // Optional
-    "due_date": "YYYY-MM-DD", // Optional
-    "due_time": "HH:MM", // Optional
-    "priority": "низкий|средний|высокий", // Optional
-    "clear_due_date": true // Optional, set to true to remove due date and time.
+  "title_query": "task title to search for", // Mandatory if task_id is unknown.
+  "new_values": {{ // Contains fields to update.
+    "title": "new task title",
+    "description": "new description",
+    "category": "new category",
+    "due_date": "YYYY-MM-DD",
+    "due_time": "HH:MM",
+    "priority": "низкий|средний|высокий",
+    "clear_due_date": true 
   }},
 
   // Fields for "list" action:
   "filters": {{
-    "category": "category name", // Optional
-    "status": "активна|выполнена|просрочена", // Optional
-    "title_query": "search text", // Optional
-    "view": "actual" | "all" // "actual" (default) for upcoming/urgent, "all" for everything.
+    "category": "category name",
+    "status": "активна|выполнена|просрочена",
+    "title_query": "search text",
+    "view": "actual" | "all"
   }},
 
   // General fields for errors or clarifications:
-  "error": "Descriptive error message if the request cannot be fully understood or fulfilled", // Use when action is null or an action fails due to missing info.
-  "clarification": "Question to ask the user if more information is needed for an action." // Use when ambiguous or insufficient info.
+  "error": "Descriptive error message", 
+  "clarification": "Question to ask the user"
 }}
 
 Rules:
-1.  You must ALWAYS return a JSON object.
-2.  If the user's request is unclear, ambiguous, or missing essential information for any action, return JSON with `action: null`, an appropriate `error` message, and potentially a `clarification` question.
-3.  For `create` action: `title` is mandatory. If missing, return an error JSON.
-4.  For `delete`, `mark_done`, and `update` actions: The request MUST include EITHER `task_id` OR `title_query`. If neither is provided, return an error.
-5.  For `update` action: At least one field within `new_values` should be provided for a meaningful update. If `new_values` is empty or missing, return an error or clarification.
-6.  Preserve existing values for fields not specified in `new_values` during an update.
-7.  Parse dates and times relative to today's date: {self.today_date}. Use `YYYY-MM-DD` for dates and `HH:MM` for times. If only a date is given, assume time is `23:59`. If the user explicitly asks to remove the due date, use `clear_due_date: true`.
-8.  If no specific action can be determined, return `action: null` with an `error` or `clarification`.
-9.  If the user asks to "показать задачи", "список", "что у меня на сегодня", use the `list` action.
-10. If the user asks for "статистика", "сколько задач", use the `get_stats` action.
+1.  ALWAYS return a valid JSON object.
+2.  If the user's request is unclear, ambiguous, or missing essential information, return JSON with `action: null`, an appropriate `error` message, and a `clarification` question.
+3.  For `create` action:
+    *   `title` is mandatory.
+    *   Formulate titles as concise noun phrases (e.g., "Поход в магазин", "Сдача отчета").
+    *   Calculate `due_date` and `due_time` based on current time ({self.now_time}) and date ({self.today_date}). "Через час" should be calculated relative to {self.now_time}.
+4.  For `delete`, `mark_done`, and `update` actions:
+    *   If `task_id` is unknown, use `title_query` to search.
+    *   IF NO TASK IS FOUND, OR IF THE REQUEST IS AMBIGUOUS, YOU MUST REQUEST A LIST OF ACTIVE TASKS TO PRESENT TO THE USER, RATHER THAN ASKING A VAGUE CLARIFICATION QUESTION. Return `action: null`, and in the `clarification` field, explicitly ask the user to choose from the list, and set the expectation that the service will provide it.
+5.  If the user asks for actions on tasks, and you are unsure which task, return `action: null` with a `clarification` question requesting the user to select from the task list.
+6.  If no action is determinable, return `action: null`.
 """
 
     def process_message(self, text: str) -> dict:
@@ -266,9 +265,17 @@ Rules:
                 elif action == "get_stats":
                     service_response = self.task_service.get_statistics_for_ai()
                 
-                # If the service call was successful and returned an answer
-                if service_response and "answer" in service_response:
-                    return service_response["answer"]
+        # If the service call was successful and returned an answer
+                if service_response:
+                    # If candidates are present, they should be displayed
+                    if "candidates" in service_response and service_response["candidates"]:
+                        # We might need to handle how candidates are displayed. 
+                        # Assuming service_response["answer"] contains the formatted candidate list.
+                        return service_response.get("answer", "Выберите задачу из списка.")
+                    
+                    if "answer" in service_response:
+                        return service_response["answer"]
+                
                 # If the service returned an error or clarification without an answer
                 elif service_response and ("error" in service_response or "clarification" in service_response):
                     return service_response.get("clarification", service_response.get("error", "Failed to process task request."))
