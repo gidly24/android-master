@@ -197,7 +197,7 @@ class TaskRow(MaterialCard):
         self.card_content_layout = BoxLayout(orientation='vertical', spacing=dp(5), padding=(0, dp(4), 0, 0), size_hint_y=None)
         self.card_content_layout.bind(minimum_height=self.card_content_layout.setter('height'))
 
-        top_row = BoxLayout(orientation='horizontal', size_hint_y=None, spacing=dp(10), height=dp(34))
+        top_row = BoxLayout(orientation='horizontal', size_hint_y=None, spacing=dp(10), height=dp(48))
 
         self.selector = SelectionToggle(is_selected=self.is_selected)
         selector_btn = Button(
@@ -214,12 +214,10 @@ class TaskRow(MaterialCard):
 
         top_row.add_widget(selector_btn)
 
-        t = Label(text=self.task.title, color=TEXT_PRIMARY, size_hint_y=None, halign="left", valign="middle", font_size=FONT_SIZE, bold=True)
+        t = Label(text=self.task.title, color=TEXT_PRIMARY, size_hint_y=None, size_hint_x=1, halign="left", valign="middle", font_size=FONT_SIZE, bold=True)
         bind_text_size(t)
         bind_auto_height(t, min_height=dp(22), extra=dp(2))
         top_row.add_widget(t)
-
-        top_row.add_widget(Widget(size_hint_x=1))
 
         status_chip = Chip(text=self.task.status.capitalize())
         top_row.add_widget(status_chip)

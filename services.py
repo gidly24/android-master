@@ -436,7 +436,7 @@ class TaskService:
         priority_label = self._priority_from_ai(payload.get("priority"), "средний")
 
         task_data = {
-            "title": (payload.get("title") or "").strip(),
+            "title": (payload.get("title") or "").strip().capitalize(),
             "description": (payload.get("description") or "Создано через ИИ-чат").strip(),
             "category": (payload.get("category") or "другое").strip().lower(),
             "due_date": due_date_part,

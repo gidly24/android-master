@@ -217,7 +217,7 @@ class TaskFormPopup(ModalView):
             from datetime import date
             self.due_date_input.text = date.today().isoformat()
         task_data = {
-            "title": self.title_input.text,
+            "title": self.title_input.text.strip().capitalize(),
             "description": self.description_input.text,
             "category": self.category_spinner.text,
             "due_date": self.due_date_input.text.strip(),
