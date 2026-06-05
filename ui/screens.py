@@ -1,3 +1,4 @@
+from kivy.clock import Clock
 from kivy.graphics import Color, Ellipse, RoundedRectangle
 from kivy.metrics import dp
 from kivy.uix.boxlayout import BoxLayout
@@ -193,8 +194,8 @@ class TaskRow(MaterialCard):
         }.get(status, CARD_ACTIVE_FILL)
 
     def _build(self):
-        card_content_layout = BoxLayout(orientation='vertical', spacing=dp(5), padding=(0, dp(4), 0, 0), size_hint_y=None)
-        card_content_layout.bind(minimum_height=card_content_layout.setter('height'))
+        self.card_content_layout = BoxLayout(orientation='vertical', spacing=dp(5), padding=(0, dp(4), 0, 0), size_hint_y=None)
+        self.card_content_layout.bind(minimum_height=self.card_content_layout.setter('height'))
 
         top_row = BoxLayout(orientation='horizontal', size_hint_y=None, spacing=dp(10), height=dp(34))
 
@@ -223,7 +224,7 @@ class TaskRow(MaterialCard):
         status_chip = Chip(text=self.task.status.capitalize())
         top_row.add_widget(status_chip)
 
-        card_content_layout.add_widget(top_row)
+        self.card_content_layout.add_widget(top_row)
 
         category = Label(
             text=self.task.category.capitalize(),
@@ -236,10 +237,14 @@ class TaskRow(MaterialCard):
         )
         bind_text_size(category)
         bind_auto_height(category, min_height=dp(22), extra=dp(2))
-        card_content_layout.add_widget(category)
+        self.card_content_layout.add_widget(category)
+
+        def _countdown_text():
+            raw = TaskService.get_countdown_text(self.task)
+            return raw.replace("Осталось: ", "").replace("Просрочена на: ", "Просрочка ")
 
         countdown = Label(
-            text=TaskService.get_countdown_text(self.task).replace("Осталось: ", "").replace("Просрочена на: ", "Просрочка "),
+            text=_countdown_text(),
             color=TEXT_MUTED,
             size_hint_y=None,
             halign="left",
@@ -249,24 +254,12 @@ class TaskRow(MaterialCard):
         )
         bind_text_size(countdown)
         bind_auto_height(countdown, min_height=dp(22), extra=dp(2))
-        card_content_layout.add_widget(countdown)
+        self.card_content_layout.add_widget(countdown)
+        self.add_widget(self.card_content_layout)
 
-        description = Label(
-            text=self.task.description.strip() if self.task.description else "Без описания.",
-            color=TEXT_MUTED,
-            size_hint_y=None,
-            halign="left",
-            valign="top",
-            font_size=FONT_SIZE,
-            bold=True
-        )
-        bind_text_size(description)
-        bind_auto_height(description, min_height=dp(20), extra=dp(2))
-        card_content_layout.add_widget(description)
-
+        # Кнопки действий
         action_size = dp(38)
         actions = BoxLayout(size_hint_y=None, height=action_size, spacing=dp(6))
-
         actions.add_widget(Widget())
 
         if not self.is_archive:
@@ -309,8 +302,20 @@ class TaskRow(MaterialCard):
         d.bind(on_release=lambda *_: self.on_delete(self.task.id))
         actions.add_widget(d)
 
-        self.add_widget(card_content_layout)
         self.add_widget(actions)
+
+        # Живой таймер: обновляем каждую секунду пока задача активна
+        def _tick(dt):
+            if countdown.parent is None:
+                return False  # виджет удалён — отменяем событие
+            countdown.text = _countdown_text()
+        self._countdown_event = Clock.schedule_interval(_tick, 1)
+
+    def on_parent(self, widget, parent):
+        # Отменяем таймер когда карточка убирается с экрана
+        if parent is None and hasattr(self, '_countdown_event') and self._countdown_event:
+            self._countdown_event.cancel()
+            self._countdown_event = None
 
 class TaskListScreen(Screen):
     def __init__(self, service, on_tasks_changed, on_open_chat, **kwargs):

@@ -1,7 +1,7 @@
 package org.kivy.android;
 
-import android.app.Notification;
 import android.app.NotificationChannel;
+import android.app.Notification;
 import android.app.NotificationManager;
 import android.app.PendingIntent;
 import android.content.BroadcastReceiver;
@@ -9,78 +9,96 @@ import android.content.Context;
 import android.content.Intent;
 import android.os.Build;
 import android.util.Log;
-import androidx.core.app.NotificationCompat;
 
 public class PythonBroadcastReceiver extends BroadcastReceiver {
-    
     private static final String TAG = "TaskControlReminder";
+    private static final String CHANNEL_ID = "task_reminder_channel";
 
     @Override
     public void onReceive(Context context, Intent intent) {
-        Log.d(TAG, "onReceive called, action=" + (intent != null ? intent.getAction() : "null"));
+        if (intent == null) {
+            return;
+        }
 
+        int taskId = intent.getIntExtra("task_id", 0);
         String title = intent.getStringExtra("title");
-        String type = intent.getStringExtra("type");
-        int task_id = intent.getIntExtra("task_id", 0);
+        if (title == null || title.length() == 0) {
+            title = intent.getStringExtra("task_title");
+        }
+        if (title == null || title.length() == 0) {
+            title = "Задача";
+        }
 
-        Log.d(TAG, "task_id=" + task_id + ", title=" + title + ", type=" + type);
-        
-        String message = "";
-        if ("before".equals(type)) {
-            message = "Через час начнется: " + title;
-        } else {
-            message = "Началось: " + title;
+        String message = "Время пришло: " + title;
+        Log.d(TAG, "Alarm received for task_id=" + taskId + ", title=" + title);
+
+        NotificationManager notificationManager = (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+        if (notificationManager == null) {
+            Log.e(TAG, "NotificationManager is null");
+            startApp(context, taskId);
+            return;
         }
-        
-        // Создаем интент для открытия приложения при клике
-        Intent notificationIntent = new Intent(context, PythonActivity.class);
-        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
-        notificationIntent.putExtra("open_task_id", task_id);
-        
-        PendingIntent pendingIntent;
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-            pendingIntent = PendingIntent.getActivity(
-                context, 
-                task_id, 
-                notificationIntent, 
-                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
-            );
-        } else {
-            pendingIntent = PendingIntent.getActivity(
-                context, 
-                task_id, 
-                notificationIntent, 
-                PendingIntent.FLAG_UPDATE_CURRENT
-            );
-        }
-        
-        // Создаем канал уведомлений (если еще не создан)
+
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            NotificationManager notificationManager = 
-                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
             NotificationChannel channel = new NotificationChannel(
-                "task_reminder_channel",
-                "Напоминания о задачах",
-                NotificationManager.IMPORTANCE_HIGH
+                    CHANNEL_ID,
+                    "Напоминания о задачах",
+                    NotificationManager.IMPORTANCE_HIGH
             );
             channel.setDescription("Уведомления о предстоящих задачах");
             notificationManager.createNotificationChannel(channel);
         }
-        
-        // Создаем уведомление
-        NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "task_reminder_channel")
-            .setContentTitle("Напоминание о задаче")
-            .setContentText(message)
-            .setSmallIcon(context.getApplicationInfo().icon)
-            .setAutoCancel(true)
-            .setPriority(NotificationCompat.PRIORITY_HIGH)
-            .setDefaults(NotificationCompat.DEFAULT_ALL)
-            .setContentIntent(pendingIntent);
-        
-        Notification notification = builder.build();
-        
-        NotificationManager notificationManager = 
-            (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        notificationManager.notify(task_id, notification);
+
+        PendingIntent contentIntent = PendingIntent.getActivity(
+                context,
+                taskId,
+                buildLaunchIntent(context, taskId),
+                pendingIntentFlags()
+        );
+
+        Notification.Builder builder;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            builder = new Notification.Builder(context, CHANNEL_ID);
+        } else {
+            builder = new Notification.Builder(context);
+        }
+
+        builder.setContentTitle("Напоминание о задаче")
+                .setContentText(message)
+                .setSmallIcon(context.getApplicationInfo().icon)
+                .setAutoCancel(true)
+                .setContentIntent(contentIntent)
+                .setDefaults(Notification.DEFAULT_ALL)
+                .setPriority(Notification.PRIORITY_HIGH);
+
+        notificationManager.notify(taskId, builder.build());
+        startApp(context, taskId);
+    }
+
+    private Intent buildLaunchIntent(Context context, int taskId) {
+        Intent launchIntent = new Intent(context, PythonActivity.class);
+        launchIntent.setFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK |
+                Intent.FLAG_ACTIVITY_CLEAR_TOP |
+                Intent.FLAG_ACTIVITY_SINGLE_TOP
+        );
+        launchIntent.putExtra("open_task_id", taskId);
+        return launchIntent;
+    }
+
+    private int pendingIntentFlags() {
+        int flags = PendingIntent.FLAG_UPDATE_CURRENT;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            flags |= PendingIntent.FLAG_IMMUTABLE;
+        }
+        return flags;
+    }
+
+    private void startApp(Context context, int taskId) {
+        try {
+            context.startActivity(buildLaunchIntent(context, taskId));
+        } catch (Exception e) {
+            Log.e(TAG, "Failed to start activity from alarm", e);
+        }
     }
 }
