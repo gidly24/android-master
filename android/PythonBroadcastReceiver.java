@@ -20,13 +20,29 @@ public class PythonBroadcastReceiver extends BroadcastReceiver {
             return;
         }
 
+        Log.d(TAG, "onReceive called, intent=" + intent);
+        Log.d(TAG, "Receiver instance = " + this.getClass().getName());
+        Log.d(TAG, "Intent action = " + intent.getAction());
+
+        android.os.Bundle extras = intent.getExtras();
+        if (extras != null) {
+            for (String key : extras.keySet()) {
+                Log.d(TAG, "EXTRA: " + key + " = " + extras.get(key));
+            }
+        } else {
+            Log.d(TAG, "Intent has NO extras");
+        }
+
         int taskId = intent.getIntExtra("task_id", 0);
         String title = intent.getStringExtra("title");
+        Log.d(TAG, "DEBUG: Received task_id=" + taskId + ", title_extra=" + title);
         if (title == null || title.length() == 0) {
             title = intent.getStringExtra("task_title");
+            Log.d(TAG, "DEBUG: Try task_title=" + title);
         }
         if (title == null || title.length() == 0) {
             title = "Задача";
+            Log.d(TAG, "DEBUG: Title fell back to default: " + title);
         }
 
         String message = "Время пришло: " + title;
@@ -63,7 +79,7 @@ public class PythonBroadcastReceiver extends BroadcastReceiver {
             builder = new Notification.Builder(context);
         }
 
-        builder.setContentTitle("Напоминание о задаче")
+        builder.setContentTitle(title)
                 .setContentText(message)
                 .setSmallIcon(context.getApplicationInfo().icon)
                 .setAutoCancel(true)

@@ -120,6 +120,42 @@ class TaskService:
         normalized_search = search_text.lower().strip()
         return [task for task in tasks if normalized_search in task.title.lower()]
 
+    def clear_all_alarms(self):
+        if platform != "android":
+            return
+        
+        try:
+            from jnius import autoclass, cast
+
+            PythonActivity = autoclass("org.kivy.android.PythonActivity")
+            AlarmManager = autoclass("android.app.AlarmManager")
+            PendingIntent = autoclass("android.app.PendingIntent")
+            Intent = autoclass("android.content.Intent")
+            Context = autoclass("android.content.Context")
+            receiver_class = autoclass("org.kivy.android.PythonBroadcastReceiver")
+
+            activity = PythonActivity.mActivity
+            alarm_manager = cast(
+                "android.app.AlarmManager",
+                activity.getSystemService(Context.ALARM_SERVICE),
+            )
+            
+            # Try to cancel a massive range of potential alarm IDs
+            for request_code in range(0, 1000):
+                intent = Intent(activity, receiver_class)
+                intent.setAction(self.ANDROID_ALARM_ACTION)
+                pending_intent = PendingIntent.getBroadcast(
+                    activity,
+                    request_code,
+                    intent,
+                    PendingIntent.FLAG_NO_CREATE | PendingIntent.FLAG_IMMUTABLE
+                )
+                if pending_intent:
+                    alarm_manager.cancel(pending_intent)
+                    pending_intent.cancel()
+        except Exception as e:
+            print(f"Failed to clear all alarms: {e}")
+
     def _cancel_android_alarm(self, task_id: int):
         if platform != "android" or task_id is None:
             return
@@ -146,7 +182,23 @@ class TaskService:
                 flags |= PendingIntent.FLAG_IMMUTABLE
 
             request_codes = {int(task_id), int(task_id) * 2}
-            actions = (self.ANDROID_ALARM_ACTION, "com.taskcontrol.reminder", None)
+            # Add a broader range of possible intents to cancel, 
+            # including those potentially created with default request codes
+            for request_code in range(0, 1000): # Cancel a broad range to be safe
+                for action in actions:
+                    intent = Intent(activity, receiver_class)
+                    if action:
+                        intent.setAction(action)
+                    pending_intent = PendingIntent.getBroadcast(
+                        activity,
+                        request_code,
+                        intent,
+                        flags,
+                    )
+                    if pending_intent:
+                        alarm_manager.cancel(pending_intent)
+                        pending_intent.cancel()
+            # Also cancel the specific one we think is ours
             for request_code in request_codes:
                 for action in actions:
                     intent = Intent(activity, receiver_class)
@@ -192,16 +244,20 @@ class TaskService:
             Context = autoclass("android.content.Context")
             BuildVersion = autoclass("android.os.Build$VERSION")
             receiver_class = autoclass("org.kivy.android.PythonBroadcastReceiver")
+            String = autoclass('java.lang.String')
 
             activity = PythonActivity.mActivity
+            print(f"DEBUG: Preparing intent for task: id={task.id}, title='{task.title}'")
             intent = Intent(activity, receiver_class)
             intent.setAction(self.ANDROID_ALARM_ACTION)
-            intent.putExtra("title", task.title)
+            intent.putExtra("title", String(task.title))
             intent.putExtra("task_id", int(task.id))
-            intent.putExtra("type", "exact")
-            print(f"DEBUG: Intent created with title='{task.title}', task_id={task.id}")
+            intent.putExtra("type", String("exact"))
+            print(f"DEBUG: Intent created. Extras set: title='{task.title}', task_id={int(task.id)}")
+            print(f"DEBUG BEFORE PI: title={intent.getStringExtra('title')}, task_id={intent.getIntExtra('task_id', -1)}")
 
-            flags = PendingIntent.FLAG_UPDATE_CURRENT
+            # Changed from FLAG_UPDATE_CURRENT to FLAG_CANCEL_CURRENT for testing
+            flags = PendingIntent.FLAG_CANCEL_CURRENT
             if BuildVersion.SDK_INT >= 23:
                 flags |= PendingIntent.FLAG_IMMUTABLE
 

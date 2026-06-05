@@ -10,6 +10,9 @@ import android.content.Intent;
 import android.os.Build;
 import android.util.Log;
 import androidx.core.app.NotificationCompat;
+import android.database.Cursor;
+import android.database.sqlite.SQLiteDatabase;
+import java.io.File;
 
 public class PythonBroadcastReceiver extends BroadcastReceiver {
     
@@ -18,30 +21,40 @@ public class PythonBroadcastReceiver extends BroadcastReceiver {
     @Override
     public void onReceive(Context context, Intent intent) {
         Log.d(TAG, "onReceive called, intent=" + intent);
-import android.database.Cursor;
-import android.database.sqlite.SQLiteDatabase;
-import java.io.File;
-
-// ... inside onReceive ...
         int task_id = intent.getIntExtra("task_id", 0);
         String title = intent.getStringExtra("title");
+        String type = intent.getStringExtra("type");
+        
+        Log.d(TAG, "DEBUG: Raw intent extras: title=" + title + ", task_id=" + task_id);
         
         if (title == null && task_id > 0) {
             try {
                 File dbFile = new File(context.getFilesDir(), "app/tasks.db");
-                SQLiteDatabase db = SQLiteDatabase.openDatabase(dbFile.getPath(), null, SQLiteDatabase.OPEN_READONLY);
-                Cursor cursor = db.query("tasks", new String[]{"title"}, "id = ?", new String[]{String.valueOf(task_id)}, null, null, null);
-                if (cursor.moveToFirst()) {
-                    title = cursor.getString(0);
+                Log.d(TAG, "DEBUG: DB file path=" + dbFile.getPath() + ", exists=" + dbFile.exists());
+                
+                if (dbFile.exists()) {
+                    SQLiteDatabase db = SQLiteDatabase.openDatabase(dbFile.getPath(), null, SQLiteDatabase.OPEN_READONLY);
+                    Cursor cursor = db.query("tasks", new String[]{"title"}, "id = ?", new String[]{String.valueOf(task_id)}, null, null, null);
+                    Log.d(TAG, "DEBUG: Cursor count=" + cursor.getCount());
+                    
+                    if (cursor.moveToFirst()) {
+                        title = cursor.getString(0);
+                        Log.d(TAG, "DEBUG: Title found in DB: " + title);
+                    } else {
+                        Log.d(TAG, "DEBUG: No task found with id=" + task_id);
+                    }
+                    cursor.close();
+                    db.close();
+                } else {
+                    Log.e(TAG, "DEBUG: DB file not found at " + dbFile.getPath());
                 }
-                cursor.close();
-                db.close();
             } catch (Exception e) {
-                Log.e(TAG, "Error fetching title from DB: " + e.getMessage());
+                Log.e(TAG, "Error fetching title from DB: " + e.getMessage(), e);
             }
         }
         if (title == null) title = "Задача";
         
+        String message = "";
         if ("before".equals(type)) {
             message = "Через час начнется: " + title;
         } else if ("exact".equals(type)) {
@@ -53,9 +66,42 @@ import java.io.File;
         Log.d(TAG, "Notification title set to: " + title);
         Log.d(TAG, "Notification message set to: " + message);
 
-        // ... (rest of the code unchanged)
+        Intent notificationIntent = new Intent(context, PythonActivity.class);
+        notificationIntent.setFlags(Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        notificationIntent.putExtra("open_task_id", task_id);
         
-        // Создаем уведомление
+        PendingIntent pendingIntent;
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+            pendingIntent = PendingIntent.getActivity(
+                context, 
+                task_id, 
+                notificationIntent, 
+                PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE
+            );
+        } else {
+            pendingIntent = PendingIntent.getActivity(
+                context, 
+                task_id, 
+                notificationIntent, 
+                PendingIntent.FLAG_UPDATE_CURRENT
+            );
+        }
+        
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+            NotificationManager notificationManager = 
+                (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
+            
+            NotificationChannel channel = new NotificationChannel(
+                "task_reminder_channel",
+                "Напоминания о задачах",
+                NotificationManager.IMPORTANCE_HIGH
+            );
+            
+            if (notificationManager != null) {
+                notificationManager.createNotificationChannel(channel);
+            }
+        }
+        
         NotificationCompat.Builder builder = new NotificationCompat.Builder(context, "task_reminder_channel")
             .setContentTitle(title)
             .setContentText(message)
@@ -65,33 +111,11 @@ import java.io.File;
             .setDefaults(NotificationCompat.DEFAULT_ALL)
             .setContentIntent(pendingIntent);
         
-        Notification notification = builder.build();
-        
-        // Log notification build status
-        if (notification != null) {
-            Log.d(TAG, "Notification built successfully.");
-        } else {
-            Log.e(TAG, "Notification build failed.");
-            return;
-        }
-
         NotificationManager notificationManager = 
             (NotificationManager) context.getSystemService(Context.NOTIFICATION_SERVICE);
-        
-        // Log if NotificationManager is null again before notifying
-        if (notificationManager == null) {
-            Log.e(TAG, "NotificationManager is null before notify call!");
-            return;
-        }
-
-        try {
-            // Log before calling notify
-            Log.d(TAG, "Calling notificationManager.notify for task_id: " + task_id);
-            notificationManager.notify(task_id, notification);
+        if (notificationManager != null) {
+            notificationManager.notify(task_id, builder.build());
             Log.d(TAG, "notificationManager.notify called successfully.");
-        } catch (Exception e) {
-            Log.e(TAG, "Exception during notificationManager.notify: " + e.getMessage());
-            e.printStackTrace();
         }
     }
 }

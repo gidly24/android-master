@@ -1,5 +1,6 @@
 <receiver android:name="org.kivy.android.PythonBroadcastReceiver" android:exported="true">
     <intent-filter>
         <action android:name="android.intent.action.BOOT_COMPLETED"/>
+        <action android:name="org.example.taskcontrol.TASK_ALARM"/>
     </intent-filter>
 </receiver>
